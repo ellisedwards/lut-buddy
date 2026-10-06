@@ -1,0 +1,26 @@
+node_modules/
+.DS_Store
+*.log
+*.zip
+evidence/
+design-prototype/
+# Personal media and saved libraries belong outside the source project.
+*.sqlite
+*.sqlite.*
+
+.env
+.env.*
+*.cube
+*.mp4
+*.mov
+*.mxf
+*.rgb48le
+# Preserved local prototype and migration tools are not the browser product.
+src/main.cjs
+src/preload.cjs
+ui/app.js
+ui/style.css
+ui/panels.html
+scripts/import-viewer.cjs
+scripts/adapt-viewer.cjs
+CONTINUE_HERE.txt
