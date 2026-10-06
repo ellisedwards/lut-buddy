@@ -62,6 +62,9 @@ recording profile separately. A ported target is retained with its saved copy.
 Porting creates a linked **33-point CUBE**, keeps the original, copies a starred
 source's favourite status in the active project and reuses an existing matching
 version. A small copy icon in the Library and thumbnail strip identifies a port.
+Converted thumbnails also have a subtly warm, nearly black abbreviation band.
+The viewer footer shows **Converted from** with the source LUT and recording
+profile; original LUTs keep their usual styling.
 Further ports use the original look when available, avoiding repeated sampling.
 Selected and reference versions follow the same look between compatible scenes.
 

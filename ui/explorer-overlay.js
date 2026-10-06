@@ -120,7 +120,7 @@ $('scene-count').textContent=`${records.length} looks · ${scenes.length} scenes
 $('reference').append(makeOption('','X · No LUT / original log'));
 for (const r of records) {
  $('reference').append(makeOption(r.name,`${r.code} · ${r.stem}`));
- const button=document.createElement('button');button.className='tile';button.dataset.name=r.name;
+ const button=document.createElement('button');button.className=r.adaptation?'tile converted':'tile';button.dataset.name=r.name;
  button.setAttribute('aria-label',`${r.code} — ${r.name}`);button.setAttribute('aria-pressed','false');button.title=`${r.code} · ${r.name}`;
  const img=document.createElement('img');img.src=imagePath(canUseLut(r.name)?r.name:'');img.alt='';img.draggable=false;
  const code=document.createElement('span');code.className='code';code.textContent=r.code;
@@ -218,7 +218,11 @@ async function render() {
   if (version!==renderVersion) return;
   $('filename').textContent=label(name);updateDescription(name);
   const r=byName.get(name);
-  $('look-detail').textContent=(r?`${r.maker} · ${r.code}`:'Untreated log image')+(comparing?` · comparing against ${label(state.selected)}`:'');
+  const origin=r?.adaptation;
+  const sourceProfile=origin&&productBoot.profiles.find(p=>p.id===origin.sourceViewerProfile)?.label.split(' · ').at(-1);
+  const provenance=origin?` · Converted from ${origin.sourceName||'source LUT'}${sourceProfile?' · '+sourceProfile:''}`:'';
+  $('look-detail').textContent=(r?`${r.maker} · ${r.code}`:'Untreated log image')+provenance+(comparing?` · comparing against ${label(state.selected)}`:'');
+  $('look-detail').title=origin?$('look-detail').textContent:'';
   $('badge-text').textContent=comparing?'Comparison':(name?'Selected LUT':'No LUT');
   $('badge').classList.toggle('reference',comparing);
   const adjusted=await renderAdjustments(name,scene,version);

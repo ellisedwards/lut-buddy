@@ -17,6 +17,7 @@ dialog{max-width:520px;width:calc(100% - 32px);background:var(--panel);color:var
 @media(max-width:700px){.readout{gap:10px;align-items:flex-start}.look-description{font-size:10px;max-width:44%}.look-title strong{font-size:11px}}
 
 .camera-strip{position:absolute;bottom:calc(100% + 10px);left:10px;right:10px;display:flex;align-items:center;justify-content:flex-start;flex-wrap:wrap;gap:5px 16px;color:#fff;font-size:11px;line-height:1.5;text-shadow:0 1px 4px #000,0 0 9px #000b;pointer-events:none}.camera-strip span{white-space:nowrap}.camera-strip small{font-size:9px;letter-spacing:.4px;margin-right:4px;color:#e7e8eb}.image-button[aria-pressed=true]{color:var(--accent)}@media(max-width:700px){.camera-strip{font-size:10px;gap:3px 10px}.camera-strip small{font-size:8px}.viewer-actions{right:10px;top:10px;gap:2px}.viewer-actions .image-button,.viewer-actions .favourite-button{width:28px;height:28px}}
+.tile.converted .code{background:linear-gradient(transparent,#2b1c12f2 25%)}
 .auto-balance{font-size:11px;padding:6px 9px;margin:0 0 2px}.adjust-panel{max-height:calc(100% - 160px)}
 .camera-strip{left:24px;right:24px;z-index:3}@media(max-width:700px){.camera-strip{left:20px;right:20px}.badge{padding:5px 6px;font-size:9px;top:12px;left:10px}.viewer-actions{gap:1px}.viewer-actions .image-button,.viewer-actions .favourite-button{width:25px;height:27px}}
 .viewer-actions button:focus,.viewer-actions button:focus-visible{outline:none;box-shadow:none}

@@ -58,5 +58,6 @@ module.exports=[
   "tests/reliability.test.cjs",
   "tests/release.test.cjs",
   "docs/SUPPORTED-MEDIA.md",
-  "docs/RELEASING.md"
+  "docs/RELEASING.md",
+  "docs/HANDOFF.md"
 ];
