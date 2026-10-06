@@ -10,7 +10,7 @@ async function manifest(store,projectId,signal){
  const prefs=data.settings?JSON.parse(data.settings.state):{favourites:data.luts.filter(l=>l.favourite).map(l=>JSON.parse(l.details).legacy?l.original_name:`${l.id}.cube`),adjustments:{},theme:'dark'};if(prefs.lutOrder){const order=new Map(prefs.lutOrder.map((id,i)=>[id,i]));data.luts.sort((a,b)=>(order.get(a.id)??Infinity)-(order.get(b.id)??Infinity));}prefs.lutOrder=data.luts.map(l=>l.id);data.settings={project_id:projectId,revision:data.settings?.revision||randomUUID(),state:JSON.stringify(prefs)};
  const files=new Set();const add=name=>{if(safe(name)&&fs.existsSync(path.join(store.root,name)))files.add(name);};
  function references(value){if(typeof value==='string')add(value.replace(/^assets\//,''));else if(Array.isArray(value))value.forEach(references);else if(value&&typeof value==='object')Object.values(value).forEach(references);}
- for(const clip of data.clips){const m=JSON.parse(clip.metadata);if(m.librarySource){add(m.librarySource);clip.source='';}else clip.source='';}
+ for(const clip of data.clips){const m=JSON.parse(clip.metadata);if(m.librarySource)add(m.librarySource);clip.source='';if(m.format)delete m.format.filename;clip.metadata=JSON.stringify(m);}
  for(const s of data.scenes){add(s.asset);add(s.thumb);references(JSON.parse(s.details));if(JSON.parse(s.details).legacy)for(const l of data.luts){const d=JSON.parse(l.details);if(d.legacy)add(`gallery/${s.id}/${d.code}.jpg`);}}
  for(const l of data.luts)add(l.asset);
  for(const name of files){signal?.throwIfAborted();const file=sourceFile(store.root,name);data.files.push({name,size:fs.statSync(file).size,sha256:await media.digest(file,signal)});}

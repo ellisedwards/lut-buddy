@@ -79,7 +79,7 @@ function updateCameraInfo(){
  const a={...sceneAdjustments()},name=state.comparing?state.reference:state.selected;
  if(hasAdjustment(a)){
   const edited=group();edited.classList.add('camera-adjustments');
-  const sourceEditable=byScene.get(state.scene)?.profile==='sony-slog3-sgamut3cine';
+  const sourceEditable=!!window.LUTSourceCurves.forProfile(byScene.get(state.scene)?.profile);
   const active=[];
   if(sourceEditable){
    if(Math.abs(a.exposure)>1e-6)active.push(['Exposure',`${a.exposure>0?'+':''}${a.exposure.toFixed(2)} EV`]);
@@ -396,9 +396,9 @@ function sceneAdjustments(scene=state.scene){return state.adjustments[scene]||(s
 function hasAdjustment(a){return Math.abs(a.warmth)>1e-6||Math.abs(a.tint)>1e-6||Math.abs(a.exposure)>1e-6||Math.abs(a.contrast-1)>1e-6||Math.abs(a.saturation-1)>1e-6;}
 function updateAdjustmentControls(){
  const a=sceneAdjustments(),name=state.comparing?state.reference:state.selected;
- const sourceEditable=byScene.get(state.scene)?.profile==='sony-slog3-sgamut3cine';
+ const sourceEditable=!!window.LUTSourceCurves.forProfile(byScene.get(state.scene)?.profile);
  for(const key of ['exposure','warmth','tint','auto-balance'])$(key).disabled=!sourceEditable;
- $('source-profile-note').textContent=sourceEditable?'Exposure & colour before LUT · contrast & saturation after.':'Source exposure/balance controls currently support Sony S-Log3. Contrast & saturation remain available after a LUT.';
+ $('source-profile-note').textContent=sourceEditable?'Exposure & colour before LUT · contrast & saturation after.':'Confirm a supported recording profile to adjust exposure and colour. Contrast & saturation remain available after a LUT.';
  for(const key of ['exposure','warmth','tint','contrast','saturation'])$(key).value=a[key];
  $('exposure-value').textContent=`${a.exposure>0?'+':''}${a.exposure.toFixed(2)} EV`;
  for(const key of ['warmth','tint'])$(key+'-value').textContent=`${a[key]>0?'+':''}${a[key]}`;
@@ -409,7 +409,7 @@ function updateAdjustmentControls(){
 }
 async function renderAdjustments(name,scene,version){
  const a={...sceneAdjustments(scene)},canvas=$('live-preview');
- if(byScene.get(scene)?.profile!=='sony-slog3-sgamut3cine'){a.exposure=0;a.warmth=0;a.tint=0;}
+ if(!window.LUTSourceCurves.forProfile(byScene.get(scene)?.profile)){a.exposure=0;a.warmth=0;a.tint=0;}
  if(!a.enabled||!hasAdjustment(a)||(!name&&a.exposure===0&&a.warmth===0&&a.tint===0)){
   $('adjust-status').textContent=!a.enabled&&hasAdjustment(a)?'Bypassed · settings kept.':'';return false;
  }
@@ -418,7 +418,7 @@ async function renderAdjustments(name,scene,version){
   if(!liveRenderer)liveRenderer=new window.LUTPreviewRenderer(canvas);
   const done=await liveRenderer.render(byScene.get(scene),byName.get(name),{...a});
   if(!done||version!==renderVersion)return;
-  if(!name){$('filename').textContent='No LUT · S-Log3';$('look-detail').textContent='Log image · source adjustments';}
+  if(!name){$('filename').textContent='No LUT · '+(byScene.get(scene)?.gamma||'Original');$('look-detail').textContent='Log image · source adjustments';}
   else $('look-detail').textContent+=' · adjusted';
   $('adjust-status').textContent=name?'Settings kept for this scene.':'Source adjustments · contrast and saturation need a LUT.';
   return true;
@@ -430,7 +430,7 @@ for(const key of ['exposure','warmth','tint','contrast','saturation'])$(key).add
  const a=sceneAdjustments();a[key]=Number(event.target.value);a.enabled=true;updateAdjustmentControls();save();cancelAnimationFrame(adjustFrame);adjustFrame=requestAnimationFrame(()=>render());
 });
 $('adjust-bypass').addEventListener('click',()=>{const a=sceneAdjustments();a.enabled=!a.enabled;render();});
-$('auto-balance').addEventListener('click',async()=>{const button=$('auto-balance'),scene=state.scene;button.disabled=true;$('adjust-status').textContent='Estimating neutral balance…';try{if(!liveRenderer)liveRenderer=new window.LUTPreviewRenderer($('live-preview'));const balance=await liveRenderer.autoBalance(byScene.get(scene));if(scene!==state.scene)return;Object.assign(sceneAdjustments(),balance,{enabled:true});await render();$('adjust-status').textContent='Estimated balance · refine with the colour sliders.';}catch(error){$('adjust-status').textContent=error.message;}finally{button.disabled=false;}});
+$('auto-balance').addEventListener('click',async()=>{const button=$('auto-balance'),scene=state.scene;button.disabled=true;$('adjust-status').textContent='Estimating neutral balance…';try{if(!liveRenderer)liveRenderer=new window.LUTPreviewRenderer($('live-preview'));const balance=await liveRenderer.autoBalance(byScene.get(scene));if(scene!==state.scene)return;Object.assign(sceneAdjustments(),balance,{enabled:true});await render();$('adjust-status').textContent='Estimated balance · refine with the colour sliders.';}catch(error){$('adjust-status').textContent=error.message;}finally{updateAdjustmentControls();}});
 $('adjust-reset').addEventListener('click',()=>{state.adjustments[state.scene]=cleanAdjustments();render();});
 function downloadBlob(blob,filename){const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=filename;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);}
 $('save-image').addEventListener('click',async()=>{

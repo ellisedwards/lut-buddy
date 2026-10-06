@@ -1,5 +1,9 @@
 // Public source only: personal libraries, binaries and old prototypes stay local.
 module.exports=[
+  "tests/import-coverage.test.cjs",
+  "tests/source-adjustments.test.cjs",
+  "ui/source-curves.js",
+  "src/local-files.cjs",
   "package.json",
   "package-lock.json",
   "README.md",

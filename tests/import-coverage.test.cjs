@@ -1,0 +1,71 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+const camera=require('../src/camera.cjs'),media=require('../src/media.cjs'),{startServer}=require('../src/server.cjs'),projects=require('../src/project-files.cjs');
+const stream={width:96,height:64,time_base:'1/24',color_transfer:'bt709',color_primaries:'bt709',color_space:'bt709'},pts=['0','1'];
+const ul=tail=>Buffer.from('060e2b340000000000000000'+tail,'hex').join(' ');
+function rtmd(gamut){return Object.fromEntries([0,1].flatMap(i=>Object.entries({SampleTime:i/24,Sony_rtmd_0x3210:ul('01010605'),Sony_rtmd_0x3219:ul(gamut),Sony_rtmd_0x321a:ul('02020000')}).map(([k,v])=>[`Doc${i+1}:Track3:${k}`,v])));}
+function xml(count,gamut='s-gamut3'){return `<NonRealTimeMeta><Duration value="${count}"/><Device modelName="Test Sony"/><AcquisitionRecord><Group><Item name="CaptureGammaEquation" value="s-log3"/><Item name="CaptureColorPrimaries" value="${gamut}"/><Item name="CodingEquations" value="rec709"/></Group></AcquisitionRecord></NonRealTimeMeta>`;}
+test('Common SDR/HLG tags work across brands; incomplete, contradictory and unsupported modes stay unverified',()=>{
+ for(const Make of ['Sony','Apple','Canon','Panasonic','FUJIFILM','Nikon','Blackmagic Design']){
+  assert.equal(camera.parseCamera({Make},stream,pts).detectedProfile,'rec709');
+  assert.equal(camera.parseCamera({Make},{...stream,color_transfer:'arib-std-b67',color_primaries:'bt2020',color_space:'bt2020nc'},pts).detectedProfile,'hlg-bt2020');
+  for(const tags of [{color_transfer:'unknown'},{color_primaries:'bt2020'},{color_space:'unknown'},{color_transfer:'smpte2084'}])assert.equal(camera.parseCamera({Make},{...stream,...tags},pts).detectedProfile,null);
+ }
+ assert.equal(camera.parseCamera({Make:'Apple',Model:'iPhone 17 Pro'},{...stream,color_transfer:'unknown'},pts).detectedProfile,null);
+ const tags=rtmd('01030104');assert.equal(camera.parseCamera(tags,stream,pts).detectedProfile,'sony-slog3-sgamut3');assert.equal(camera.parseCamera(rtmd('01030105'),stream,pts).detectedProfile,'sony-slog3-sgamut3cine');
+ const unsupported=rtmd('01030104');for(const doc of [1,2])unsupported[`Doc${doc}:Track3:Sony_rtmd_0x3210`]=ul('ffffffff');assert.equal(camera.parseCamera(unsupported,stream,pts).detectedProfile,null,'Unsupported recorded gamma cannot fall back to generic SDR');
+ tags['Doc2:Track3:SampleTime']=2;assert.equal(camera.parseCamera(tags,stream,pts).detectedProfile,null,'unaligned Sony evidence cannot fall back to generic SDR');
+ tags['Doc2:Track3:SampleTime']=1/24;tags['Doc2:Track3:Sony_rtmd_0x3219']=ul('01030105');assert.equal(camera.parseCamera(tags,stream,pts).detectedProfile,null,'changing gamut cannot become a single clip profile');
+});
+test('Matched camera XML supersedes generic SDR transfer tags but never conflicting recorded camera evidence',()=>{
+ for(const [gamut,id] of [['s-gamut3','sony-slog3-sgamut3'],['s-gamut3-cine','sony-slog3-sgamut3cine']]){
+  const metadata={stream,pts,sha256:'test',camera:camera.parseCamera({Make:'Sony'},stream,pts)};camera.attachSidecar(metadata,'clip.mp4','clipM01.xml',xml(2,gamut));assert.equal(metadata.camera.detectedProfile,id);assert.equal(camera.atFrame(metadata,0,'clip').settings.gamma.display,'S-Log3');
+ }
+ const metadata={stream,pts,sha256:'test',camera:camera.parseCamera(rtmd('01030104'),stream,pts)};assert.throws(()=>camera.attachSidecar(metadata,'clip.mp4','clipM01.xml',xml(2,'s-gamut3-cine')),/conflicts/);
+});
+test('Oversized per-frame metadata falls back to bounded static tags and cancellation propagates',async()=>{
+ const calls=[];const read=async(b,args,signal,a,c,options)=>{calls.push({args,options});if(args.includes('-ee'))throw Object.assign(Error('large'),{code:'OUTPUT_LIMIT'});return {output:JSON.stringify([{Make:'Canon',Model:'EOS R6',ISO:800}])};};
+ const value=await camera.extract('fixture.mov',stream,pts,undefined,read);assert.equal(value.staticTags.Model,'EOS R6');assert.equal(value.detectedProfile,'rec709');assert.match(value.warning,/too large/);const info=camera.atFrame({camera:value,stream,pts,sha256:'test'},1,'fixture.mov');assert.equal(info.settings.iso.value,800);assert.equal(info.settings.iso.scope,'clip');assert.equal(calls[0].options.maxOutputBytes,16*1024*1024);assert.equal(calls[1].args.includes('-ee'),false);assert.equal(calls[1].options.maxOutputBytes,1024*1024);
+ const abort=new AbortController();abort.abort();await assert.rejects(camera.extract('fixture.mov',stream,pts,abort.signal,async()=>{abort.signal.throwIfAborted();}));
+ await assert.rejects(media.run(process.execPath,['-e','process.stdout.write("x".repeat(65536))'],undefined,undefined,undefined,{maxOutputBytes:1024}),e=>e.code==='OUTPUT_LIMIT');
+});
+test('H.264, HEVC and ProRes timestamps and late-frame capture match independent decoded originals',async()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'lut-import-codecs-')),{Store}=require('../src/store.cjs'),store=await Store.open(root);
+ try{for(const [codec,pix,ext] of [['libx264','yuv420p10le','mp4'],['libx265','yuv420p10le','mov'],['prores_ks','yuv422p10le','mov']]){
+  const source=path.join(root,codec+'.'+ext),args=['-v','error','-f','lavfi','-i','testsrc2=size=96x64:rate=10:duration=3','-vf',"setpts='if(lt(N,10),N,2*N-10)/(10*TB)+2/TB'",'-c:v',codec,'-pix_fmt',pix,'-fps_mode','vfr','-color_trc','bt709','-color_primaries','bt709','-colorspace','bt709','-movflags','+write_colr'];if(codec==='libx265')args.push('-x265-params','log-level=error:pools=1');await media.run(media.ffmpeg,[...args,source]);
+  const metadata=await media.inspect(source);const tagged=metadata.stream.color_transfer==='bt709'&&metadata.stream.color_primaries==='bt709'&&metadata.stream.color_space==='bt709';assert.equal(metadata.camera.detectedProfile,tagged?'rec709':null,'Missing ProRes transfer tags stay unverified');assert.equal(metadata.indexSource,'container packet timestamps');
+  const decoded=[];await media.run(media.ffprobe,['-v','error','-select_streams','v:0','-show_frames','-show_entries','frame=best_effort_timestamp','-of','compact=p=0',source],undefined,line=>{const m=line.match(/^best_effort_timestamp=(-?\d+)/);if(m)decoded.push(m[1]);});assert.deepEqual(metadata.pts,decoded);
+  const index=metadata.pts.length-2,frame=await media.frame({id:codec,source,metadata:JSON.stringify(metadata)},index,root),reference=path.join(root,codec+'-reference.png');await media.run(media.ffmpeg,['-v','error','-i',source,'-vf',`select=eq(n\\,${index})${!tagged?'':',scale=in_color_matrix=bt709:in_range=limited:out_range=full:flags=accurate_rnd+full_chroma_int,format=rgb48le'}`,'-frames:v','1','-pix_fmt','rgb48be',reference]);
+  const rgb=async file=>(await media.run(media.ffmpeg,['-v','error','-i',file,'-pix_fmt','rgb48be','-f','framemd5','-'])).output.split('\n').find(l=>l&&!l.startsWith('#')).split(',').at(-1).trim();assert.equal(await rgb(path.join(root,frame.asset)),await rgb(reference));
+ }}finally{store.close();fs.rmSync(root,{recursive:true,force:true});}
+});
+test('A >2GB linked original streams without copying, offers six frames, exports saved scenes and relinks safely',async()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'lut-big-linked-')),library=path.join(root,'library'),source=path.join(root,"Large é clip.mp4");let app;
+ try{
+  await media.run(media.ffmpeg,['-v','error','-f','lavfi','-i','testsrc2=size=96x64:rate=10:duration=3','-c:v','libx264','-pix_fmt','yuv420p10le','-color_trc','bt709','-color_primaries','bt709','-colorspace','bt709',source]);
+  // Valid MOV free box creates a real >2GB logical file with sparse padding.
+  const size=fs.statSync(source).size,boxSize=2**31+4096,header=Buffer.alloc(8);header.writeUInt32BE(boxSize);header.write('free',4);const fd=fs.openSync(source,'r+');fs.writeSync(fd,header,0,8,size);fs.ftruncateSync(fd,size+boxSize);fs.closeSync(fd);
+  let chosen=[source];app=await startServer({root:library,port:0,chooseClipFiles:async()=>chosen});const response=await fetch(app.url),html=await response.text(),boot=JSON.parse(html.match(/id="product-boot"[^>]*>([\s\S]*?)<\/script>/)[1]),headers={Cookie:response.headers.get('set-cookie').split(';')[0],'X-LUT-Token':boot.token,'Content-Type':'application/json'};
+  const call=async(method,payload={})=>{const r=await fetch(app.url+'/api/call',{method:'POST',headers,body:JSON.stringify({method,payload:{projectId:boot.projectId,...payload}})}),v=await r.json();if(!v.ok)throw Error(v.error);return v.data;};
+  const baseline=process.memoryUsage().rss;let peak=baseline;const monitor=setInterval(()=>peak=Math.max(peak,process.memoryUsage().rss),10);let linked;try{linked=await call('linkClips',{paths:['/etc/passwd']});}finally{clearInterval(monitor);}assert.equal(linked.errors.length,0);const id=linked.imported[0].id,clip=app.store.one('SELECT * FROM clips WHERE id=?',[id]),metadata=JSON.parse(clip.metadata);assert.ok(metadata.fingerprint.size>2**31);assert.ok(peak-baseline<256*1024*1024,`Unexpected memory increase ${peak-baseline}`);assert.equal(clip.source,fs.realpathSync(source));assert.deepEqual(fs.readdirSync(path.join(library,'clips')),[]);assert.equal(clip.profile,'rec709');
+  const candidates=await call('frameCandidates',{clipId:id});assert.equal(candidates.length,6);assert.equal(candidates.at(-1).index,metadata.pts.length-1);assert.equal(fs.readdirSync(path.join(library,'cache')).length,6,'only selected thumbnail candidates are decoded');assert.equal((await call('clip',{id})).linked,true);
+  await call('capture',{clipId:id,indices:[candidates[3].index],names:['Large-file scene']});await call('setClipProfile',{id,value:'apple-log2'});await call('refreshClipMetadata',{id}).then(()=>assert.fail('manual conflicting profile must be protected'),e=>assert.match(e.message,/conflicts/));await call('setClipProfile',{id,value:'rec709'});await call('refreshClipMetadata',{id});assert.equal(JSON.parse(app.store.one('SELECT metadata FROM clips WHERE id=?',[id]).metadata).linked,true);
+  const destination=path.join(root,'saved.lutproject'),data=await projects.save(app.store,boot.projectId,destination);assert.equal(data.clips[0].source,'');assert.equal(JSON.parse(data.clips[0].metadata).format.filename,undefined);assert.ok(data.files.every(f=>!f.name.startsWith('clips/')));assert.ok(fs.statSync(destination).size<1024*1024);
+  const imported=await projects.open(app.store,destination),saved=app.store.state().scenes.find(s=>s.project_id===imported.projectId),newClip=app.store.one('SELECT * FROM clips WHERE project_id=?',[imported.projectId]);assert.ok(fs.existsSync(path.join(library,saved.asset)));assert.throws(()=>media.unchanged(newClip),/Linked clip is missing/);
+  fs.renameSync(source,source+'.moved.mp4');chosen=[source+'.moved.mp4'];const again=await call('linkClips',{projectId:imported.projectId});assert.equal(again.imported[0].id,newClip.id);assert.equal(again.imported[0].duplicate,true);assert.equal(app.store.state().clips.filter(c=>c.project_id===imported.projectId).length,1);const relinked=app.store.one('SELECT * FROM clips WHERE id=?',[newClip.id]);assert.equal(media.unchanged(relinked).sha256,metadata.sha256);assert.equal(relinked.profile,'rec709');assert.equal(JSON.parse(relinked.metadata).profileSelectedByUser,true);
+  chosen=[];assert.deepEqual((await call('linkClips')).imported,[]);chosen=[path.join(root,'bad.mp4')];fs.writeFileSync(chosen[0],'broken');assert.equal((await call('linkClips')).errors.length,1);assert.equal(app.store.state().clips.length,2);assert.equal(fs.statSync(source+'.moved.mp4').size,metadata.fingerprint.size);
+ }finally{await app?.close();fs.rmSync(root,{recursive:true,force:true});}
+});
+test('Mac native chooser compiles and Path strings preserve spaces and Unicode', {skip:process.platform!=='darwin'},async()=>{
+ const {chooserScript}=require('../src/local-files.cjs'),root=fs.mkdtempSync(path.join(os.tmpdir(),'lut-native-picker-'));try{const file=path.join(root,'picker.js');fs.writeFileSync(file,chooserScript);await media.run('/usr/bin/osacompile',['-l','JavaScript','-o',path.join(root,'picker.scpt'),file]);const result=await media.run('/usr/bin/osascript',['-l','JavaScript','-e',`JSON.stringify([Path(${JSON.stringify("/tmp/é camera's clip.mov")}).toString()])`]);assert.deepEqual(JSON.parse(result.output).map(p=>p.normalize("NFC")),["/tmp/é camera's clip.mov"]);}finally{fs.rmSync(root,{recursive:true,force:true});}
+});
+test('Closing frame choices cancels only its own decoder and leaves saved work intact',async()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'lut-candidates-cancel-'));let app;const original=media.previewFrame;let started,aborted;const entered=new Promise(r=>started=r),cancelled=new Promise(r=>aborted=r);
+ try{
+  app=await startServer({root,port:0});const p=app.store.state().projects[0].id;app.store.change(()=>app.store.db.run('INSERT INTO clips VALUES (?,?,?,?,?,?)',['clip',p,'test','ignored','unknown',JSON.stringify({pts:['0','1'],stream:{time_base:'1/24'},fingerprint:{size:1,mtimeMs:1}})]));
+  const originalUnchanged=media.unchanged;media.unchanged=clip=>JSON.parse(clip.metadata);media.previewFrame=async(clip,index,root,signal)=>{started();return new Promise((resolve,reject)=>signal.addEventListener('abort',()=>{aborted();reject(signal.reason);},{once:true}));};
+  try{const r=await fetch(app.url),boot=JSON.parse((await r.text()).match(/id="product-boot"[^>]*>([\s\S]*?)<\/script>/)[1]),headers={Cookie:r.headers.get('set-cookie').split(';')[0],'X-LUT-Token':boot.token,'Content-Type':'application/json'},call=(method,payload,signal)=>fetch(app.url+'/api/call',{method:'POST',signal,headers,body:JSON.stringify({method,payload})});
+   const before=app.store.state(),controller=new AbortController(),work=call('frameCandidates',{clipId:'clip',requestId:'choices'},controller.signal).catch(e=>e);await entered;await call('cancel',{requestId:'another-window'});controller.abort();await work;await Promise.race([cancelled,new Promise((_,reject)=>{const t=setTimeout(()=>reject(Error('Decoder was not cancelled')),2000);t.unref();})]);assert.deepEqual(app.store.state(),before);
+  }finally{media.unchanged=originalUnchanged;}
+ }finally{media.previewFrame=original;await app?.close();fs.rmSync(root,{recursive:true,force:true});}
+});

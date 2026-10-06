@@ -1,6 +1,5 @@
-/* Source log -> scene-linear exposure -> log -> unchanged 3D LUT -> look controls.
-   S-Log3 formula: Sony Technical Summary, appendix, page6.
-   https://download.pro.sony/FNGP/protein/1237494271390/1237494271406.pdf */
+/* Source profile -> relative scene-linear exposure/balance -> source profile
+   -> unchanged 3D LUT -> look controls. Shared curves: source-curves.js. */
 window.LUTPreviewRenderer = class {
  constructor(canvas) {
   this.canvas=canvas;canvas.width=1280;canvas.height=720;
@@ -15,9 +14,8 @@ window.LUTPreviewRenderer = class {
   in vec2 uv;out vec4 colour;
   uniform sampler2D source;uniform sampler3D cube;
   uniform vec3 domainMin,domainMax;uniform int cubeSize;uniform bool useLut;
-  uniform float exposure,contrast,saturation;uniform vec3 balance;
-  float decodeLog(float x){return x>=171.2102946929/1023.0?pow(10.0,(x*1023.0-420.0)/261.5)*0.19-0.01:(x*1023.0-95.0)*0.01125/(171.2102946929-95.0);}
-  float encodeLog(float x){return x>=0.01125?(420.0+log((x+0.01)/0.19)/log(10.0)*261.5)/1023.0:(x*(171.2102946929-95.0)/0.01125+95.0)/1023.0;}
+  uniform float exposure,contrast,saturation;uniform vec3 balance;uniform int sourceCurve;
+  ${window.LUTSourceCurves.shader()}
   vec3 lookup(vec3 c){
    vec3 p=clamp((c-domainMin)/(domainMax-domainMin),0.0,1.0)*float(cubeSize-1);
    ivec3 a=ivec3(floor(p)),b=min(a+ivec3(1),ivec3(cubeSize-1));vec3 f=fract(p);
@@ -35,7 +33,7 @@ window.LUTPreviewRenderer = class {
   this.program=gl.createProgram();gl.attachShader(this.program,compile(gl.VERTEX_SHADER,vertex));gl.attachShader(this.program,compile(gl.FRAGMENT_SHADER,fragment));gl.linkProgram(this.program);
   if(!gl.getProgramParameter(this.program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(this.program));
   gl.useProgram(this.program);this.uniforms={};
-  for(const name of ['source','cube','domainMin','domainMax','cubeSize','useLut','exposure','contrast','saturation','balance'])this.uniforms[name]=gl.getUniformLocation(this.program,name);
+  for(const name of ['source','cube','domainMin','domainMax','cubeSize','useLut','exposure','contrast','saturation','balance','sourceCurve'])this.uniforms[name]=gl.getUniformLocation(this.program,name);
   gl.uniform1i(this.uniforms.source,0);gl.uniform1i(this.uniforms.cube,1);
   // Complete dummy 3D texture for the no-LUT branch.
   this.dummy=gl.createTexture();gl.bindTexture(gl.TEXTURE_3D,this.dummy);this.configure(gl.TEXTURE_3D);
@@ -65,7 +63,7 @@ window.LUTPreviewRenderer = class {
  }
  async autoBalance(scene){
   await this.source(scene);const rgb=this.rgbFrames.get(scene.id),samples=[];
-  const decode=x=>x>=171.2102946929/1023?10**((x*1023-420)/261.5)*.19-.01:(x*1023-95)*.01125/(171.2102946929-95);
+  const curve=window.LUTSourceCurves.forProfile(scene.profile);if(!curve)throw Error('Confirm a supported recording profile first.');const decode=curve.decode;
   for(let i=0;i<rgb.length;i+=3*13){const c=[decode(rgb[i]),decode(rgb[i+1]),decode(rgb[i+2])],lo=Math.min(...c),hi=Math.max(...c),mean=(c[0]+c[1]+c[2])/3;if(lo<.025||hi>1.5||mean<.06)continue;const chroma=(hi-lo)/hi;if(chroma>.55)continue;samples.push({c,chroma,mean});}
   if(samples.length<100)throw new Error('Too few neutral candidates. Use the colour sliders.');
   samples.sort((a,b)=>a.chroma-b.chroma);const neutral=samples.slice(0,Math.max(100,Math.floor(samples.length*.2)));
@@ -78,7 +76,7 @@ window.LUTPreviewRenderer = class {
   const version=++this.version;const [source,lut]=await Promise.all([this.source(scene),this.lut(record)]);if(version!==this.version)return false;
   const width=scene.preview_width||1280,height=scene.preview_height||720;this.canvas.width=width;this.canvas.height=height;const gl=this.gl;gl.useProgram(this.program);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,source);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_3D,lut.texture);
   gl.uniform3fv(this.uniforms.domainMin,lut.lo);gl.uniform3fv(this.uniforms.domainMax,lut.hi);gl.uniform1i(this.uniforms.cubeSize,lut.size);gl.uniform1i(this.uniforms.useLut,record?1:0);
-  const w=adjustments.warmth||0,t=adjustments.tint||0;gl.uniform3fv(this.uniforms.balance,[2**(w*.004+t*.002),2**(-t*.004),2**(-w*.004+t*.002)]);
+  const curve=window.LUTSourceCurves.forProfile(scene.profile);if(!curve&&(adjustments.exposure||adjustments.warmth||adjustments.tint))throw Error('Confirm a supported recording profile first.');gl.uniform1i(this.uniforms.sourceCurve,curve?.index??-1);gl.uniform3fv(this.uniforms.balance,window.LUTSourceCurves.balance(adjustments.warmth,adjustments.tint));
   gl.uniform1f(this.uniforms.exposure,adjustments.exposure);gl.uniform1f(this.uniforms.contrast,adjustments.contrast);gl.uniform1f(this.uniforms.saturation,adjustments.saturation);
   gl.viewport(0,0,width,height);gl.drawArrays(gl.TRIANGLES,0,3);if(gl.getError()!==gl.NO_ERROR)throw new Error('Live preview could not render.');
   while(this.sources.size>2){const key=this.sources.keys().next().value,p=this.sources.get(key);this.sources.delete(key);this.rgbFrames.delete(key);p.then(texture=>gl.deleteTexture(texture));}

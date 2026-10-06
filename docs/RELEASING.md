@@ -28,6 +28,6 @@ libraries may run on distinct ports. After SIGKILL or a crash, the writer lock
 can remain for up to one minute before safely expiring. Do not manually remove
 a lock while another copy might still be using that library.
 
-GitHub automatic checks are configured, but passing remote CI is not claimed
-until the repository exists and a run completes. Another-computer testing is
-separate and remains deferred.
+GitHub automatic checks run on each push. Confirm the run for the exact release
+commit before publishing; a previous passing run does not establish a new build.
+Another-computer testing is separate and remains deferred.

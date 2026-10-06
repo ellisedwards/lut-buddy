@@ -187,7 +187,7 @@ test('Recorded HLG tags are distinct from Apple Log, and uncertain recording mod
  const info=c.withFormat(c.atFrame({stream,pts:['0'],camera:value,sha256:'test'},0,'phone.mov'),{stream},value.detectedProfile);assert.equal(info.format.fields.camera_model.display,'iPhone 15 Pro');assert.equal(info.format.fields.gamma.display,'HLG');assert.equal(info.format.profileStatus,'recorded');
  value=c.parseCamera({'QuickTime:Make':'Apple'},{...stream,color_transfer:'unknown'},['0']);assert.equal(value.detectedProfile,null);
  value=c.parseCamera({'QuickTime:Make':'Apple'},{...stream,color_transfer:'bt709',color_primaries:'bt709',color_space:'bt709'},['0']);assert.equal(value.detectedProfile,'rec709');
- value=c.parseCamera({'QuickTime:Make':'Sony'},{...stream,color_transfer:'bt709',color_primaries:'bt709',color_space:'bt709'},['0']);assert.equal(value.detectedProfile,null,'Sony log footage must not be classified from generic 709 tags');
+ value=c.parseCamera({'QuickTime:Make':'Sony'},{...stream,color_transfer:'bt709',color_primaries:'bt709',color_space:'bt709'},['0']);assert.equal(value.detectedProfile,'rec709','Matching recorded SDR tags are usable across camera brands');
 });
 
 test('Apple Log 2 remains separate from Apple Log 1 and Sony, with its own gamut',()=>{

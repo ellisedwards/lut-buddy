@@ -7,15 +7,15 @@ const readline = require('node:readline');
 const ffmpeg = require('ffmpeg-static');
 const ffprobe = require('@ffprobe-installer/ffprobe').path;
 const camera=require('./camera.cjs');
-function run(binary,args,signal,onLine,onErrorLine,{cwd}={}) {
+function run(binary,args,signal,onLine,onErrorLine,{cwd,maxOutputBytes=32*1024*1024}={}) {
   return new Promise((resolve,reject) => {
     const child=spawn(binary,args,{stdio:['ignore','pipe','pipe'],signal,cwd});
-    let output='',errors='';
+    let output='',errors='',outputBytes=0,overflow;
     if(onLine) { const lines=readline.createInterface({input:child.stdout}); lines.on('line',onLine); }
-    else child.stdout.on('data',chunk=> {output+=chunk;});
+    else child.stdout.on('data',chunk=> {outputBytes+=chunk.length;if(outputBytes>maxOutputBytes){if(!overflow){overflow=Object.assign(new Error('Recorded metadata is too large to read at once.'),{code:'OUTPUT_LIMIT'});child.kill();}return;}output+=chunk;});
     child.stderr.on('data',chunk=> {errors=(errors+chunk).slice(-64000);});
     if(onErrorLine){const lines=readline.createInterface({input:child.stderr});lines.on('line',onErrorLine);}
-    child.on('error',reject); child.on('close',code=>code===0?resolve({output,errors}):reject(new Error(signal?.aborted?'Operation cancelled.':`Media tool could not read this file. ${errors.slice(-900)}`)));
+    child.on('error',reject); child.on('close',code=>overflow?reject(overflow):code===0?resolve({output,errors}):reject(new Error(signal?.aborted?'Operation cancelled.':`Media tool could not read this file. ${errors.slice(-900)}`)));
   });
 }
 async function digest(file,signal) {
@@ -26,7 +26,7 @@ async function digest(file,signal) {
 function fingerprint(file) { const stat=fs.statSync(file); if(!stat.isFile()) throw new Error('Select a local video file.'); return {size:stat.size,mtimeMs:stat.mtimeMs}; }
 function unchanged(clip) {
   const metadata=JSON.parse(clip.metadata);
-  let stat; try {stat=fingerprint(clip.source);} catch {throw new Error('Clip is missing. Restore a library backup or reimport the original clip. Saved scenes still work.');}
+  let stat; try {stat=fingerprint(clip.source);} catch {throw new Error(metadata.linked?'Linked clip is missing. Use Link original clips to locate it again. Saved scenes still work.':'Clip is missing. Restore a library backup or reimport the original clip. Saved scenes still work.');}
   if (stat.size!==metadata.fingerprint.size||stat.mtimeMs!==metadata.fingerprint.mtimeMs) throw new Error('The original clip has changed. Reimport it before capturing another frame. Saved scenes still work.');
   return metadata;
 }
@@ -36,14 +36,24 @@ async function inspect(file,signal,notify=()=>{}) {
   const probe=JSON.parse((await run(ffprobe,['-v','error','-show_streams','-show_format','-of','json',file],signal)).output);
   const video=probe.streams.find(stream=>stream.codec_type==='video'&&!stream.disposition?.attached_pic);
   if(!video) throw new Error('This file has no supported video stream.');
-  const pts=[];let missingTimestamp=false;
-  notify('Indexing original frames. You can cancel this import…');
+  const pts=[];let missingTimestamp=false,indexSource='decoded frames';
+  // Common MOV/MP4 codecs carry one progressive picture per packet. Use their
+  // recorded presentation timestamps only when the declared frame count agrees.
+  // Other formats retain the decoded index; every saved frame verifies its PTS.
+  if(['h264','hevc','prores'].includes(video.codec_name)&&/^\d+$/.test(video.nb_frames||'')&&Number(video.nb_frames)>0&&!['tt','bb','tb','bt'].includes(video.field_order)){
+    notify('Reading the clip frame index…');
+    const packetPTS=[];let invalid=false;
+    await run(ffprobe,['-v','error','-select_streams',String(video.index),'-show_packets','-show_entries','packet=pts','-of','compact=p=0:nk=0',file],signal,line=>{if(!line.startsWith('pts='))return;const m=line.match(/^pts=(-?\d+)(?:\||$)/);if(m)packetPTS.push(m[1]);else invalid=true;});
+    packetPTS.sort((a,b)=>BigInt(a)<BigInt(b)?-1:BigInt(a)>BigInt(b)?1:0);
+    if(!invalid&&packetPTS.length===Number(video.nb_frames)&&packetPTS.every((p,i)=>!i||BigInt(p)>BigInt(packetPTS[i-1]))){for(const p of packetPTS)pts.push(p);indexSource='container packet timestamps';}
+  }
+  if(!pts.length){notify('Indexing original frames. You can cancel this import…');
   await run(ffprobe,['-v','error','-select_streams',String(video.index),'-show_frames','-show_entries','frame=best_effort_timestamp','-of','compact=p=0:nk=0',file],signal,line=> {
     // Some probes concatenate first-frame SEI side data without a delimiter.
     if(!line.startsWith('best_effort_timestamp='))return;
     const match=line.match(/^best_effort_timestamp=(-?\d+)(?:$|side_data_type=|\|)/);
     if(match)pts.push(match[1]);else missingTimestamp=true;
-  });
+  });}
   if(missingTimestamp)throw new Error('A frame has no usable timestamp. This clip cannot be marked accurately.');
   if(/^\d+$/.test(video.nb_frames||'')&&Number(video.nb_frames)!==pts.length)throw new Error('Frame index does not match the clip frame count. Nothing was imported.');
   if(!pts.length) throw new Error('No frame timestamps were found. This clip cannot be marked accurately.');
@@ -53,7 +63,7 @@ async function inspect(file,signal,notify=()=>{}) {
   notify('Checking original clip identity…');
   const sha256=await digest(file,signal),after=fingerprint(file);
   if(before.size!==after.size||before.mtimeMs!==after.mtimeMs) throw new Error('Clip changed while importing. Please retry.');
-  return {stream:video,format:probe.format,pts,sha256,fingerprint:after,camera:recorded,...(recorded.aligned&&recorded.recording?.matrix?{decoding:{matrix:recorded.recording.matrix,range:video.color_range,evidence:'Recorded Sony RTMD coding equations'}}:{}),decoderVersion:'ffmpeg-static 5.3.0',colourStatus:'Decoded range/matrix use recorded metadata where available. Absent tags remain [Unverified]; reference colour accuracy [Unverified].'};
+  return {stream:video,format:probe.format,pts,indexSource,sha256,fingerprint:after,camera:recorded,...(recorded.aligned&&recorded.recording?.matrix?{decoding:{matrix:recorded.recording.matrix,range:video.color_range,evidence:'Recorded Sony RTMD coding equations'}}:{}),decoderVersion:'ffmpeg-static 5.3.0',colourStatus:'Decoded range/matrix use recorded metadata where available. Absent tags remain [Unverified]; reference colour accuracy [Unverified].'};
 }
 function rgbConversion(metadata) {
   // A recording gamma/gamut does not establish the YUV decoding matrix.
@@ -73,9 +83,11 @@ async function frame(clip,index,root,signal) {
   if(!fs.existsSync(full)||!fs.existsSync(small)) {
     const temporary=path.join(root,'staging',`${randomUUID()}.png`);
     try {
-      const filters=[`select=eq(n\\,${index})`,'showinfo',rgbConversion(metadata)].filter(Boolean).join(',');
-      const decoded=await run(ffmpeg,['-hide_banner','-loglevel','info','-copyts','-i',clip.source,'-map',`0:${metadata.stream.index}`,'-vf',filters,'-frames:v','1','-fps_mode','passthrough','-pix_fmt','rgb48be','-update','1',temporary],signal);
-      const match=decoded.errors.match(/Parsed_showinfo_[^\n]*n:\s*0\s+pts:\s*(-?\d+)/);
+      const filters=[`select=eq(pts\\,${metadata.pts[index]})`,'showinfo',rgbConversion(metadata)].filter(Boolean).join(',');
+      const [n,d]=metadata.stream.time_base.split('/').map(Number),seek=Math.max(Number(metadata.pts[0])*n/d,Number(metadata.pts[index])*n/d-1);
+      const decode=fast=>run(ffmpeg,['-hide_banner','-loglevel','info','-copyts',...(fast?['-ss',String(seek),'-seek_timestamp','1']:[]),'-i',clip.source,'-map',`0:${metadata.stream.index}`,'-vf',filters,'-frames:v','1','-fps_mode','passthrough','-pix_fmt','rgb48be','-update','1','-y',temporary],signal);
+      let decoded=await decode(true),match=decoded.errors.match(/Parsed_showinfo_[^\n]*n:\s*0\s+pts:\s*(-?\d+)/);
+      if(!match||match[1]!==metadata.pts[index]||!fs.existsSync(temporary)){decoded=await decode(false);match=decoded.errors.match(/Parsed_showinfo_[^\n]*n:\s*0\s+pts:\s*(-?\d+)/);}
       if(!match||match[1]!==metadata.pts[index]) throw new Error('Decoded frame did not match the marked timestamp. Nothing was imported.');
       unchanged(clip);
       await thumbnail(temporary,small,signal);

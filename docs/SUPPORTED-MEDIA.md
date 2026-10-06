@@ -14,7 +14,7 @@ damaged footage must fail without publishing partial library records.
   lens, recording-profile and per-frame exposure information. XML is matched
   against the selected video; selecting a video alone cannot expose a neighboring
   XML file to the browser.
-- Matching HLG tags identify HLG. Matching Apple SDR tags identify Rec.709.
+- Matching HLG tags identify HLG. Matching SDR transfer, primaries and matrix tags identify Rec.709 across camera brands.
   Apple Log / Apple Log 2 cannot be assigned to every iPhone recording: absent
   proof, the user confirms the actual recording mode.
 - Other camera profile labels are choices for explicit matching/conversion,
@@ -34,8 +34,11 @@ inputs and their exact restrictions. Converted copies are 33-point, linked to
 the source look and marked with a copy icon. RAW, D-Log M and arbitrary HDR
 rendering are excluded. AI suggests labels; numerical conversion stays in code.
 
-Source exposure/white-balance adjustments currently support Sony S-Log3. Post-LUT
-contrast/saturation remain available for other profiles. Browser previews are
+Source exposure and relative colour balance support the 16 published Log/gamut
+combinations, Rec.709 and HLG. The selected transfer curve is decoded before
+exposure/balance and re-encoded before applying the original LUT. Balance is
+relative, not a Kelvin calibration. Unknown modes keep these controls disabled.
+Post-LUT contrast/saturation remain available for compatible LUTs. Browser previews are
 look comparisons, not a calibrated grading monitor. Cross-camera matching,
 including sensor/exposure/white-balance differences, remains `[Unverified]`
 until tested on paired footage.
@@ -49,8 +52,35 @@ Local real-browser checks cover a fresh library, imports, scenes, comparison,
 conversion, project export/reopen and safe cache clearing. Those checks do not
 establish physical camera calibration or broad codec support.
 
-Long imports index original frame timestamps. Up to 2,000 frames use a prepared
-scrub sequence; longer clips generate cached previews on demand. Library > Storage
+Imports index original frame timestamps. Progressive H.264, HEVC and ProRes use
+recorded packet timestamps only when declared frame counts and unique PTS agree;
+other clips retain decoded indexing. Every selected capture checks decoded PTS.
+Clips under 512 MB with up to 2,000 frames use a prepared scrub sequence; larger
+clips generate cached previews on demand. Six evenly spaced candidate previews
+provide a quick alternative to scrubbing; they are not automatic cut detection. Library > Storage
 reports usage and clears generated previews after processing finishes. Footage,
 saved scenes, LUTs, preferences and backups are retained. Automatic deletion of
 personal media or backups is not part of this release.
+
+## Large originals
+
+Mac users can link original clips through the native file picker. Browser requests
+cannot provide arbitrary paths. Originals are read in chunks and hashed once; they
+are not copied into the library or loaded as one video-sized buffer. Timestamp
+metadata still uses memory proportional to clip length. A sparse synthetic MP4
+over 2 GB passed import, six-preview selection, scene capture, project roundtrip
+and relinking with under 256 MB additional process memory. This does not establish
+long-camera-clip performance. H.264, HEVC and ProRes synthetic VFR/nonzero-start
+fixtures passed independent frame comparisons. ProRes tags absent from the probe
+remain unverified rather than becoming an assumed profile.
+
+Linked originals must remain available for further captures. Project exports and
+backups contain saved scenes, LUTs and settings but exclude linked originals.
+Relink the same original after moving it or opening an exported project. Native
+chooser compilation/path handling is verified locally; picker selection in browser
+workflow tests uses injected paths rather than an automated OS dialog click.
+
+Per-frame metadata output is bounded. Oversized or unreadable metadata falls back
+to clip-level metadata with a visible notice; frame settings remain unavailable.
+A matching Sony XML may supersede generic transfer/gamut tags, but conflicting
+recorded Sony RTMD or decoding matrices are rejected.
