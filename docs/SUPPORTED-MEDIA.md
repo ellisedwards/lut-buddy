@@ -15,8 +15,10 @@ damaged footage must fail without publishing partial library records.
   against the selected video; selecting a video alone cannot expose a neighboring
   XML file to the browser.
 - Matching HLG tags identify HLG. Matching SDR transfer, primaries and matrix tags identify Rec.709 across camera brands.
-  Apple Log / Apple Log 2 cannot be assigned to every iPhone recording: absent
-  proof, the user confirms the actual recording mode.
+  Apple Log / Apple Log 2 are detected from the selected original QuickTime video
+  track's Apple Log identifier when present and consistent. The parser skips
+  compressed footage and bounds metadata reads; an iPhone model alone never
+  establishes the profile. Absent proof, the user confirms the recording mode.
 - Other camera profile labels are choices for explicit matching/conversion,
   not promises of automatic metadata detection for every model.
 - Curve/gamut, YUV matrix and full/limited range are independent. Missing
@@ -51,6 +53,14 @@ conflicts, cancellation, file validation and library-protection fault tests.
 Local real-browser checks cover a fresh library, imports, scenes, comparison,
 conversion, project export/reopen and safe cache clearing. Those checks do not
 establish physical camera calibration or broad codec support.
+
+A real 1.32 GB, 4K ProRes HQ iPhone 17 Pro recording passed direct linking,
+six distinct on-demand frame choices, back-and-forth browser scrubbing, and
+full-resolution capture matching an independent frame-number decode. Its
+embedded Apple Log identifier agreed with macOS Core Media. A connected Claude
+Code automatically drafted scene details without saving them. The original and
+personal library were unchanged. File selection was injected in this isolated
+test; interactive native file-picker selection remains separately unverified.
 
 Imports index original frame timestamps. Progressive H.264, HEVC and ProRes use
 recorded packet timestamps only when declared frame counts and unique PTS agree;

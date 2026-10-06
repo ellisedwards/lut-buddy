@@ -60,6 +60,15 @@ async function inspect(file,signal,notify=()=>{}) {
   if(pts.some((v,i)=>i>0&&BigInt(v)<=BigInt(pts[i-1]))) throw new Error('This clip has duplicate or non-increasing frame timestamps; exact-frame support needs further validation.');
   notify('Reading recorded camera settings…');
   const recorded=await camera.extract(file,video,pts,signal,run);
+  const log=await require('./quicktime-log.cjs').readLogProfile(file,video,signal);
+  if(log?.present){
+    const conflict=Object.values(recorded.recording||{}).some(Boolean)&&recorded.recordingSource!=='Original video stream colour tags';
+    recorded.logIdentifier=log.identifier;
+    recorded.detectedProfile=conflict?null:log.profile;
+    recorded.recording=!conflict&&log.profile?{gamma:log.gamma,gamut:log.gamut,matrix:video.color_space}:null;
+    recorded.recordingSource='Original video track Log identifier';
+    if(conflict||log.warning)recorded.warning=conflict?'Recorded camera settings conflict with the video Log identifier. Confirm the recording profile.':log.warning;
+  }
   notify('Checking original clip identity…');
   const sha256=await digest(file,signal),after=fingerprint(file);
   if(before.size!==after.size||before.mtimeMs!==after.mtimeMs) throw new Error('Clip changed while importing. Please retry.');

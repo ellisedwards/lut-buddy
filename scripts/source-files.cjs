@@ -1,5 +1,7 @@
 // Public source only: personal libraries, binaries and old prototypes stay local.
 module.exports=[
+  "src/quicktime-log.cjs",
+  "tests/quicktime-log.test.cjs",
   "tests/import-coverage.test.cjs",
   "tests/source-adjustments.test.cjs",
   "ui/source-curves.js",
