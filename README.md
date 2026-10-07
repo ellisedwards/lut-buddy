@@ -39,9 +39,9 @@ Drag a scene's small handle onto another row to rearrange it, or onto a collecti
 
 Hover or keyboard-focus a collection to show its reorder handle and rename pencil; scene handles also appear on hover/focus. Touch devices keep these controls available. Collections can be arranged and renamed without shifting the rows. All scenes stays pinned. Alt + Up/Down on a collection handle also rearranges it. Folder order persists across restarts and is reflected in the Library selectors.
 
-Choose **Select** for checkboxes and select several scenes. **Select all** selects the current search results; the count includes any selections hidden by your search. Use **Add to…** to add the selection to an existing or new collection, or **Remove from collection** when browsing a folder. Dragging a selected scene carries the selection. On a Mac, Command-click also starts selection and Shift-click selects a range.
+Choose **Select** for checkboxes and select several scenes. **Select all** selects the current search results; the count includes any selections hidden by your search. Use **Add to…** to add the selection to an existing or new collection, or **Remove from collection** when browsing a folder. Dragging a selected scene carries the selection. On a Mac, Command-click also starts selection and Shift-click selects a range. In **All scenes**, choose **Remove from project** to remove selected scenes everywhere in that project. **Select all** selects the current search/device results; clear those filters first to empty the whole project. Dragging scenes out to the trash target in All scenes does the same thing. Original clips and saved files are kept, and one Undo restores the whole removal. In a collection, **Remove from collection** still only removes that membership.
 
-When dragging out of a collection, a small trash target appears outside the picker. Drop there to **remove from that collection**. Scenes remain in All scenes and their other collections; dropping elsewhere cancels. **Undo removal** restores the most recent removed group and its previous order during the current page session. There is no trash target in All scenes.
+When dragging scenes, a small trash target appears outside the picker. In a collection, drop there to **remove from that collection**; scenes remain in All scenes and their other collections. In All scenes, it removes them from the project. Dropping elsewhere cancels. **Undo removal** restores the most recent removed group and its previous order. Project removal can also be undone after reloading the page.
 
 The camera button (C) groups information as camera → recording profile/gamut → dimensions, frame rate and bit depth/chroma sampling → shooting settings. Labels are gray, with subtle lines between related groups. Fields share one line when space allows and wrap when needed. This information changes with each scene, including mixed-camera projects. Profile and gamut describe the input a LUT needs; the file's codec remains in the Library clip details. Hover a field for its metadata source. Profiles not established by recorded metadata say “selected profile”; conflicting recorded and selected profiles show “Profile mismatch”. Missing information stays [Unverified]. Apple Log here means the original Apple Log/BT.2020 profile, not Apple Log 2.
 
@@ -177,9 +177,10 @@ Ellis’s local library has three Apple Log 2 demo frames from [Nash Yang’s cr
 
 ## Optional donations
 
-The coffee icon beside the theme toggle opens a small support popover. To enable
-its **Buy me a coffee** link, set `data-donation-url=""` on `#coffee-popover` in
-`ui/index.html` to your donation page's full HTTPS URL (for example, your own
+The coffee icon beside the theme toggle opens a small support popover. Its
+**Buy me a coffee** link points to `https://ellisedwards.com/donate`. To change
+it, set `data-donation-url` on `#coffee-popover` in `ui/index.html` to your
+donation page's full HTTPS URL (for example, your own
 Buy Me a Coffee or Ko-fi page). Until configured it says **Donations coming soon**.
 The link opens the donation service in a separate tab; LUT Buddy processes no
 payments and the tool remains available without donating.

@@ -31,7 +31,8 @@ function restorePreferences(saved) {
  if (saved.reference === '' || byName.has(saved.reference)){state.reference=saved.reference;if(typeof saved.referenceLook!=='string')state.referenceLook=byName.has(saved.reference)?lookNavigation.family(byName.get(saved.reference)):'';}
  if (Array.isArray(saved.favourites)) state.favourites = [...new Set(saved.favourites.filter(name=>typeof name==='string'))];
  if (typeof saved.favouritesOnly==='boolean') state.favouritesOnly = saved.favouritesOnly;
- if(saved.adjustments&&typeof saved.adjustments==='object')for(const [scene,a] of Object.entries(saved.adjustments)){if(byScene.has(scene)&&a&&typeof a==='object')state.adjustments[scene]=cleanAdjustments(a);}
+ // Removed scenes can return through Undo. Retain their settings across reloads too.
+ if(saved.adjustments&&typeof saved.adjustments==='object')for(const [scene,a] of Object.entries(saved.adjustments)){if(a&&typeof a==='object')Object.defineProperty(state.adjustments,scene,{value:cleanAdjustments(a),enumerable:true,writable:true,configurable:true});}
 }
 let hadBrowserPreferences=false;
 try {

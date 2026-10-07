@@ -1,6 +1,6 @@
 # LUT Buddy developer handoff
 
-Updated 2026-10-06. This is a Mac-first, single-user local web project with an MIT
+Updated 2026-10-07. This is a Mac-first, single-user local web project with an MIT
 licence. Keep the existing viewer as the base experience; do not redesign it.
 
 ## Current delivery
@@ -10,6 +10,19 @@ LUT thumbnails and a **Converted from** source LUT/profile readout below the
 viewer. The existing copy indicator remains. Original LUT styling and files are
 unchanged. Comparison mode describes the LUT actually being displayed; narrow
 screens retain a single-line readout with full provenance available on hover.
+
+All scenes now supports **Select → Remove from project**, including bulk removal
+and Select all. Search and device filters limit Select all to the displayed
+results. Project removal hides scenes from every collection without deleting
+clips or saved assets; one persistent Undo restores the entire selection. The
+picker reopens after removal with Undo available, including after clearing the
+whole project. Removed scenes retain their adjustments across browser reloads
+so Undo restores those settings too. Collection removal still changes only that
+membership.
+
+The coffee popover links to the owner's `https://ellisedwards.com/donate` page.
+On 2026-10-07 that destination returned HTTP 404; configuring the link does not
+establish that the external donation page is live.
 
 The published source release is still **v0.2.1**. Later commits on `main` are
 not automatically a new release. Check the exact commit's GitHub Checks run,
@@ -72,8 +85,8 @@ not a previous green run, before describing a build as verified.
   useful, but sensor/exposure/white-balance equivalence is **[Unverified]**.
 - Unknown profiles, unsupported RAW/D-Log M variants and arbitrary HDR display
   conversion remain outside the supported conversion workflow.
-- The coffee popover exists; its donation URL still needs the owner's real
-  HTTPS destination. Do not invent a recipient or payment link.
+- The donation URL is configured; the owner still needs to publish that page
+  and verify its payment workflow.
 - Distribution is source-only. Do not bundle the current downloaded nonfree
   FFmpeg binary. A future installer needs its own licensing/distribution review.
 - Any further release needs a fresh tagged source ZIP and exact-commit CI.

@@ -26,6 +26,7 @@ module.exports=[
   "src/metadata.cjs",
   "tools/sony_camera_extra.config",
   "tests/core.test.cjs",
+  "tests/scene-removal.test.cjs",
   "tests/projects-history.test.cjs",
   "tests/ai.test.cjs",
   "tests/preferences.test.cjs",

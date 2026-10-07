@@ -7,6 +7,7 @@
  const filteredIds=scope=>orderIds(scope).filter(id=>!product.getSelection().sceneDevice||devices.get(id)?.key===product.getSelection().sceneDevice);
  const baseOrder=product.getSceneNavigation(),panel=el('scene-picker'),toggle=el('scene-picker-toggle'),list=el('scene-picker-list');
  let data={collections:[],memberships:[],sceneOrders:[],...boot.picker},available=new Set(baseOrder),browsing='',busy=false,dragging,draggingFolder,dropTarget,naming=false,requestVersion=0,selecting=false,checked=new Set(),anchor,undoRemoval,history;
+ const reopenKey='scene-picker-reopen-'+boot.projectId;
  const node=(tag,text,className)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(className)n.className=className;return n;};
  const groups=()=>data.collections.filter(c=>c.project_id===boot.projectId);
  const folder=id=>groups().find(c=>c.id===id);
@@ -29,8 +30,10 @@
  }
  function setLibrary(value){
   history=value.history||history;requestVersion++;const next={collections:value.collections||[],memberships:value.memberships||[],sceneOrders:value.sceneOrders||[]};let changed=JSON.stringify(next)!==JSON.stringify(data);data=next;
+  if(undoRemoval&&undoRemoval.historyId!==history?.undo?.id)undoRemoval=undefined;
+  if(!undoRemoval&&['Remove scene','Remove scenes'].includes(history?.undo?.label))undoRemoval={collectionId:'',historyId:history.undo.id};
   if(value.scenes){const ids=value.scenes.filter(s=>s.project_id===boot.projectId).map(s=>s.id);if(ids.length!==available.size||ids.some(id=>!available.has(id)))changed=true;available=new Set(ids);for(const scene of value.scenes)if(sceneMap.has(scene.id)){if((sceneMap.get(scene.id).tags||'')!==(scene.tags||''))changed=true;sceneMap.get(scene.id).tags=scene.tags;}}
-  if(browsing&&!folder(browsing))browsing='';const remaining=new Set(orderIds(browsing));checked=new Set([...checked].filter(id=>remaining.has(id)));sync(changed);
+  if(browsing&&!folder(browsing))browsing='';const remaining=new Set(orderIds(browsing));checked=new Set([...checked].filter(id=>remaining.has(id)));sync(changed);drawActions();
  }
  async function call(method,payload){const r=await fetch('api/call',{method:'POST',headers:{'Content-Type':'application/json','X-LUT-Token':boot.token},body:JSON.stringify({method,payload:{projectId:boot.projectId,...payload}})});const result=await r.json();if(!r.ok||result.ok===false)throw new Error(result.error||'Could not save this change.');return result.data;}
  function status(text){el('scene-picker-status').textContent=text;}
@@ -56,10 +59,11 @@
   for(const item of range)value?checked.add(item):checked.delete(item);anchor=id;draw();list.querySelector(`[data-scene="${id}"] .scene-picker-checkbox`)?.focus({preventScroll:true});
  }
  function drawActions(){
+  el('scene-picker-device').disabled=busy;
   const count=checked.size,selectButton=el('scene-picker-select');selectButton.textContent=selecting?'Done':'Select';selectButton.setAttribute('aria-pressed',String(selecting));selectButton.disabled=busy;
   el('scene-picker-actions').hidden=!selecting;el('scene-picker-count').textContent=`${count} selected`;const visible=visibleIds();el('scene-picker-select-all').textContent=visible.length&&visible.every(id=>checked.has(id))?'Deselect all':'Select all';el('scene-picker-select-all').disabled=busy||!visible.length;
   const add=el('scene-picker-add');add.replaceChildren(new Option('Add to…',''),...groups().map(c=>new Option(c.name,c.id)),new Option('New collection…','__new'));add.disabled=busy||!count;
-  el('scene-picker-remove').hidden=!browsing;el('scene-picker-remove').disabled=busy||!count;el('scene-picker-remove').title=`Remove selected scenes from ${folder(browsing)?.name||'this collection'}. Keep them in All scenes.`;
+  const removeButton=el('scene-picker-remove');removeButton.hidden=false;removeButton.disabled=busy||!count;removeButton.textContent=browsing?'Remove from collection':'Remove from project';removeButton.title=browsing?`Remove selected scenes from ${folder(browsing)?.name||'this collection'}. Keep them in All scenes.`:'Remove selected scenes from All scenes and every collection in this project. Original clips and saved files are kept; Undo is available.';
   el('scene-picker-review').disabled=busy||!count;
   el('scene-picker-undo').hidden=!undoRemoval;el('scene-picker-undo').disabled=busy;
   for(const input of list.querySelectorAll('.scene-picker-checkbox'))input.disabled=busy;
@@ -101,7 +105,7 @@
   for(const id of ids){
    const scene=sceneMap.get(id),row=node('li',undefined,'scene-picker-row');row.dataset.scene=id;
    const handle=node('button','⠿','scene-picker-grip');handle.type='button';handle.draggable=true;handle.setAttribute('aria-label','Rearrange '+scene.label);handle.title='Drag to reorder or add to a collection. Alt + Up/Down also reorders.';
-   handle.addEventListener('dragstart',e=>{if(busy){e.preventDefault();return;}dragging=checked.has(id)?orderIds(browsing).filter(item=>checked.has(item)):[id];e.dataTransfer.setData('text/plain',dragging.join('\n'));e.dataTransfer.effectAllowed='copyMove';e.dataTransfer.setDragImage(row,20,20);for(const item of dragging)list.querySelector(`[data-scene="${item}"]`)?.classList.add('scene-dragging');showTrash();status(`Dragging ${dragging.length===1?'1 scene':dragging.length+' scenes'}. Drop onto a collection to add${browsing?', or the trash target to remove from this collection':''}.`);});handle.addEventListener('dragend',clearDrag);
+   handle.addEventListener('dragstart',e=>{if(busy){e.preventDefault();return;}dragging=checked.has(id)?orderIds(browsing).filter(item=>checked.has(item)):[id];e.dataTransfer.setData('text/plain',dragging.join('\n'));e.dataTransfer.effectAllowed='copyMove';e.dataTransfer.setDragImage(row,20,20);for(const item of dragging)list.querySelector(`[data-scene="${item}"]`)?.classList.add('scene-dragging');showTrash();status(`Dragging ${dragging.length===1?'1 scene':dragging.length+' scenes'}. Drop onto a collection to add, or the trash target to ${browsing?'remove from this collection':'remove from the project'}.`);});handle.addEventListener('dragend',clearDrag);
    handle.addEventListener('keydown',e=>{if(e.altKey&&['ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();e.stopPropagation();const index=ids.indexOf(id),next=index+(e.key==='ArrowUp'?-1:1);if(next>=0&&next<ids.length)move(id,ids[next],e.key==='ArrowDown');}});
    const button=node('button',undefined,'scene-picker-choose');button.type='button';button.setAttribute('aria-pressed',String(selected===id));button.dataset.scene=id;button.title=product.sceneTitle(id);
    const image=node('img');image.src=scene.original_url||`previews/${id}/original`;image.alt='';image.draggable=false;
@@ -118,7 +122,7 @@
  function markDrop(row,after){dropTarget?.classList.remove('scene-drop-before','scene-drop-after');dropTarget=row;row.classList.add(after?'scene-drop-after':'scene-drop-before');}
  function clearDrag(){dragging=undefined;draggingFolder=undefined;dropTarget=undefined;el('scene-picker-trash').hidden=true;el('scene-picker-trash').classList.remove('scene-trash-over');for(const n of panel.querySelectorAll('.scene-dragging,.scene-drop-before,.scene-drop-after,.scene-drop-folder'))n.classList.remove('scene-dragging','scene-drop-before','scene-drop-after','scene-drop-folder');}
  function showTrash(){
-  if(!browsing)return;const trash=el('scene-picker-trash'),box=panel.getBoundingClientRect();el('scene-picker-trash-label').textContent=`Remove ${dragging.length>1?dragging.length+' scenes':'scene'} from ${folder(browsing)?.name||'collection'}`;trash.hidden=false;
+  const trash=el('scene-picker-trash'),box=panel.getBoundingClientRect(),scope=folder(browsing)?.name||'project';el('scene-picker-trash-label').textContent=`Remove ${dragging.length>1?dragging.length+' scenes':'scene'} from ${scope}`;trash.setAttribute('aria-label',browsing?'Remove dragged scenes from collection':'Remove dragged scenes from project');trash.hidden=false;
   const width=Math.min(170,innerWidth-24),height=80;trash.style.width=width+'px';let left=box.right+10,top=box.bottom-height;if(left+width>innerWidth-12){left=Math.max(12,box.right-width);top=box.bottom+10;if(top+height>innerHeight-12)top=Math.max(12,box.top-height-10);}trash.style.left=left+'px';trash.style.top=top+'px';
  }
  function autoScroll(y){const box=list.getBoundingClientRect();if(y<box.top+30)list.scrollTop-=25;else if(y>box.bottom-30)list.scrollTop+=25;}
@@ -130,10 +134,17 @@
  }
  async function add(sceneIds,collectionId){const label=folder(collectionId)?.name;await saved(()=>call('collectionMembership',{sceneIds:Array.isArray(sceneIds)?sceneIds:[sceneIds],collectionId,action:'add'}),`Added to ${label}. Still in All scenes.`);}
  async function remove(sceneIds){
-  const collectionId=browsing,label=folder(collectionId)?.name;if(!collectionId||!sceneIds.length)return;
+  const collectionId=browsing,label=folder(collectionId)?.name;if(!sceneIds.length)return;
+  if(!collectionId){
+   const remaining=new Set(orderIds()),ids=sceneIds.filter(id=>remaining.has(id));if(!ids.length)return;
+   await product.flush?.();
+   if(await saved(()=>call('removeScenes',{sceneIds:ids}),`Removed ${ids.length===1?'1 scene':ids.length+' scenes'} from the project. Original files kept. Undo is available.`))reloadPicker(`Removed ${ids.length===1?'1 scene':ids.length+' scenes'} from the project. Original files kept. Undo is available.`);
+   return;
+  }
   const members=new Set(orderIds(collectionId)),ids=sceneIds.filter(id=>members.has(id));if(!ids.length)return;
   if(await saved(()=>call('collectionMembership',{sceneIds:ids,collectionId,action:'remove'}),`Removed ${ids.length===1?'1 scene':ids.length+' scenes'} from ${label}. Kept in All scenes and other collections.`)){undoRemoval={sceneIds:ids,collectionId,historyId:history?.undo?.id};drawActions();}
  }
+ function reloadPicker(message){sessionStorage.setItem(reopenKey,message);window.LUTLibrary.reload(false);}
  async function newCollection(sceneIds){
   const result=await collectionName('New collection');
   if(result){await saved(()=>call('collection',{projectId:boot.projectId,name:result,...(sceneIds?{sceneIds:Array.isArray(sceneIds)?sceneIds:[sceneIds]}:{})}),sceneIds?'Collection created and scenes added.':'Collection created. Drag scenes here from All scenes.');}
@@ -146,8 +157,8 @@
  el('scene-picker-add').addEventListener('change',e=>{const id=e.target.value,ids=[...checked];if(id==='__new')newCollection(ids);else if(id)add(ids,id);e.target.value='';});
  el('scene-picker-review').addEventListener('click',()=>{const ids=[...checked];close();window.LUTBatchReview?.open({kind:'scene',ids});});
  el('scene-picker-remove').addEventListener('click',()=>remove([...checked]));
- el('scene-picker-undo').addEventListener('click',async()=>{const entry=undoRemoval;if(entry&&await saved(()=>call('undo',{expectedId:entry.historyId}),'Scenes restored to the collection.')){undoRemoval=undefined;if(browsing===entry.collectionId)chooseScope(browsing);drawActions();}});
- const trash=el('scene-picker-trash');trash.addEventListener('dragover',e=>{if(!dragging||!browsing||busy)return;e.preventDefault();e.dataTransfer.dropEffect='move';trash.classList.add('scene-trash-over');});trash.addEventListener('dragleave',e=>{if(!trash.contains(e.relatedTarget))trash.classList.remove('scene-trash-over');});trash.addEventListener('drop',e=>{e.preventDefault();const ids=dragging;clearDrag();if(ids)remove(ids);});
+ el('scene-picker-undo').addEventListener('click',async()=>{const entry=undoRemoval,message=entry?.collectionId?'Scenes restored to the collection.':'Scenes restored to the project.';if(entry&&await saved(()=>call('undo',{expectedId:entry.historyId}),message)){undoRemoval=undefined;if(!entry.collectionId){reloadPicker(message);return;}if(browsing===entry.collectionId)chooseScope(browsing);drawActions();}});
+ const trash=el('scene-picker-trash');trash.addEventListener('dragover',e=>{if(!dragging||busy)return;e.preventDefault();e.dataTransfer.dropEffect='move';trash.classList.add('scene-trash-over');});trash.addEventListener('dragleave',e=>{if(!trash.contains(e.relatedTarget))trash.classList.remove('scene-trash-over');});trash.addEventListener('drop',e=>{e.preventDefault();const ids=dragging;clearDrag();if(ids)remove(ids);});
  el('scene-picker-new').addEventListener('click',()=>newCollection());
  el('scene-picker-new').addEventListener('dragover',e=>{if(!dragging||busy)return;e.preventDefault();e.dataTransfer.dropEffect='copy';el('scene-picker-new').classList.add('scene-drop-folder');});
  el('scene-picker-new').addEventListener('dragleave',()=>el('scene-picker-new').classList.remove('scene-drop-folder'));
@@ -165,4 +176,5 @@
  document.addEventListener('focusin',e=>{if(!panel.hidden&&!naming&&!panel.contains(e.target)&&!toggle.contains(e.target))close();});
  window.addEventListener('resize',()=>{if(!panel.hidden)position();});window.addEventListener('blur',clearDrag);
  window.LUTScenePicker={sync,setLibrary,orderIds,close};sync();
+ const reopenMessage=sessionStorage.getItem(reopenKey);if(reopenMessage){sessionStorage.removeItem(reopenKey);open().then(()=>status(reopenMessage));}
 })();

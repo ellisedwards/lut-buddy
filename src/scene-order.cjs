@@ -27,7 +27,15 @@ function membership(store,{sceneIds,collectionId,action}){
  store.change(()=>{for(const id of sceneIds){if(action==='add')store.db.run('INSERT OR IGNORE INTO memberships VALUES (?,?)',[id,collectionId]);else store.db.run('DELETE FROM memberships WHERE scene_id=? AND collection_id=?',[id,collectionId]);}});
  return store.state();
 }
-module.exports={orderedIds,reorder,add,membership};
+function removeScenes(store,{projectId,sceneIds}){
+ store.one('SELECT id FROM projects WHERE id=?',[projectId]);
+ if(!Array.isArray(sceneIds)||!sceneIds.length||sceneIds.some(id=>typeof id!=='string')||new Set(sceneIds).size!==sceneIds.length)throw new Error('Select distinct scenes first.');
+ // Check every item before changing anything; retain files, memberships and orders for Undo.
+ for(const id of sceneIds)if(store.one('SELECT project_id FROM scenes WHERE id=? AND deleted=0',[id]).project_id!==projectId)throw new Error('Scene belongs to another project.');
+ store.change(()=>{for(const id of sceneIds)store.db.run('UPDATE scenes SET deleted=1 WHERE id=?',[id]);});
+ return store.state();
+}
+module.exports={orderedIds,reorder,add,membership,removeScenes};
 
 function seedDemoCollections(store){
  const demos=store.query('SELECT s.id,s.project_id,s.details,c.metadata FROM scenes s JOIN clips c ON c.id=s.clip_id WHERE s.deleted=0 ORDER BY s.rowid').filter(row=>JSON.parse(row.metadata).legacy&&!JSON.parse(row.details).clip);
