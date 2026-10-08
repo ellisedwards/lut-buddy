@@ -20,6 +20,21 @@ whole project. Removed scenes retain their adjustments across browser reloads
 so Undo restores those settings too. Collection removal still changes only that
 membership.
 
+New, unordered footage appears first in All scenes, newest first. Existing
+ordering within the footage/demo groups and collection orders remain intact.
+All scenes always keeps demos below footage, even if older saved orders mix them. The selected preview is requested
+before background thumbnails. Demo flags also cover imported Apple Log sample
+clips. Existing thumbnails stay visible until the next row is ready, then swap
+together. Only empty tiles have initial placeholders; no progress counter
+is added beneath the rail. A delayed overlay appears only while entering a scene,
+never while switching looks within it. Saved previews bypass the background
+generation queue, so a ready look cannot be held up by an uncached one.
+An open tab keeps its own scene/look during shared preference refreshes and
+save conflicts. Shared refreshes render without writing preferences back, so
+a tab with an older scene manifest cannot reset another tab to its old scene.
+Favourites and adjustments still synchronize. Reload older viewer tabs to load
+this fix; server restart alone cannot replace their already loaded JavaScript.
+
 The coffee popover links to the owner's `https://ellisedwards.com/donate` page.
 On 2026-10-07 that destination returned HTTP 404; configuring the link does not
 establish that the external donation page is live.

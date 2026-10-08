@@ -43,7 +43,7 @@ restorePreferences(productBoot.settings);
 if(!byScene.has(state.scene))state.scene=scenes[0]?.id||'';
 if(state.favouritesOnly && state.favourites.length && state.selected && !state.favourites.includes(state.selected)) state.selected=state.favourites[0];
 let projectReady=false,projectRevision=null,lastSharedState=null,pendingPrefs=null,savingProject=false,projectTimer=0,loadingProject=false;
-function save() { try { localStorage.setItem(preferenceKey,JSON.stringify(state));$('save-status').textContent=''; } catch { $('save-status').textContent='Favourites could not be saved in this browser.'; } if(projectReady){const snapshot=JSON.parse(JSON.stringify({...state,comparing:false}));if(JSON.stringify(snapshot)!==JSON.stringify(lastSharedState)){pendingPrefs=snapshot;try{localStorage.setItem(preferenceKey+'-pending',JSON.stringify({base:lastSharedState,revision:projectRevision,state:snapshot}));}catch{}clearTimeout(projectTimer);projectTimer=setTimeout(persistProject,200);}} }
+function save() { try { localStorage.setItem(preferenceKey,JSON.stringify(state));$('save-status').textContent=''; } catch { $('save-status').textContent='Favourites could not be saved in this browser.'; } if(projectReady){const snapshot=JSON.parse(JSON.stringify({...state,comparing:false}));if(savingProject||pendingPrefs||JSON.stringify(snapshot)!==JSON.stringify(lastSharedState)){pendingPrefs=snapshot;try{localStorage.setItem(preferenceKey+'-pending',JSON.stringify({base:lastSharedState,revision:projectRevision,state:snapshot}));}catch{}clearTimeout(projectTimer);projectTimer=setTimeout(persistProject,200);}} }
 const descriptions=JSON.parse($('descriptions').textContent);
 const cameraMetadata=JSON.parse($('camera-metadata').textContent);
 function updateStrip(){const visible=state.stripVisible;$('lut-dock').hidden=!visible;$('strip-toggle').setAttribute('aria-pressed',String(visible));$('strip-toggle').setAttribute('aria-label',visible?'Hide LUT strip':'Show LUT strip');$('strip-toggle').title=(visible?'Hide LUT strip':'Show LUT strip')+' (L)';}
@@ -123,19 +123,19 @@ for (const r of records) {
  $('reference').append(makeOption(r.name,`${r.code} · ${r.stem}`));
  const button=document.createElement('button');button.className=r.adaptation?'tile converted':'tile';button.dataset.name=r.name;
  button.setAttribute('aria-label',`${r.code} — ${r.name}`);button.setAttribute('aria-pressed','false');button.title=`${r.code} · ${r.name}`;
- const img=document.createElement('img');img.src=imagePath(canUseLut(r.name)?r.name:'');img.alt='';img.draggable=false;
+ const img=document.createElement('img');img.alt='';img.draggable=false;
  const code=document.createElement('span');code.className='code';code.textContent=r.code;
  const favourite=document.createElement('span');favourite.className='fav-badge';favourite.textContent='★';favourite.setAttribute('aria-hidden','true');
  button.append(img,code,favourite);if(r.adaptation){const ported=document.createElement('span');ported.className='ported-indicator tile-ported';ported.innerHTML='<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="8" height="8" rx="1"/><path d="M3 10H2V2h8v1"/></svg>';ported.setAttribute('aria-hidden','true');button.append(ported);button.title+=' · Ported copy of '+r.adaptation.sourceName;button.setAttribute('aria-label',button.getAttribute('aria-label')+' · Ported copy');}tiles.append(button);
 }
 $('reference').value=state.reference;
 const allTiles=[...rail.querySelectorAll('.tile')];
-const cache=new Map();
+const cache=new Map(),loadedImages=new Set();
 function loadImage(path) {
  if (!cache.has(path)) {
   const img=new Image();
-  const promise=new Promise((resolve,reject)=>{img.onload=()=>img.decode().then(()=>resolve(img),reject);img.onerror=()=>reject(new Error(`Could not load ${path}`));});
-  img.src=path;cache.set(path,promise);
+  const promise=new Promise((resolve,reject)=>{img.onload=()=>img.decode().then(()=>{if(cache.get(path)===promise)loadedImages.add(path);resolve(img);},reject);img.onerror=()=>reject(new Error(`Could not load ${path}`));});
+  img.src=path;cache.set(path,promise);promise.catch(()=>{if(cache.get(path)===promise){cache.delete(path);loadedImages.delete(path);}});
  }
  return cache.get(path);
 }
@@ -148,10 +148,10 @@ function warmScene(scene) {
  if(warmedScenes.length>2) warmedScenes.shift();
  // Keep only the two most recent scenes in the preload cache.
  for(const path of cache.keys()) {
-  if(!warmedScenes.some(id=>path.startsWith('previews/'+id+'/'))) cache.delete(path);
+  if(!warmedScenes.some(id=>path.startsWith('previews/'+id+'/'))){cache.delete(path);loadedImages.delete(path);}
  }
  // Preloading makes the click-and-drag sweep instantaneous once images arrive.
- for (const name of ['',...byName.keys()])if(canUseLut(name,scene))loadImage(imagePath(name,scene)).catch(()=>{});
+ for (const name of [state.comparing?state.reference:state.selected,'',...byName.keys()])if(canUseLut(name,scene))loadImage(imagePath(name,scene)).catch(()=>{});
 }
 let renderVersion=0;
 function visibleNames() { return ['',...records.filter(r=>canUseLut(r.name)&&(!state.favouritesOnly || state.favourites.includes(r.name))).map(r=>r.name)]; }
@@ -207,15 +207,20 @@ function updateControls() {
  updateAdjustmentControls();updateStrip();updateCameraInfo();
  window.LUTScenePicker?.sync();
 }
-async function render() {
+async function render({persist=true}={}) {
  if(!scenes.length){preview.hidden=true;preview.removeAttribute('src');$('live-preview').hidden=true;$('filename').textContent='Your footage, your looks';$('look-detail').textContent='Open Library to import a clip and mark your scenes.';$('empty-library').hidden=false;return;}
  $('empty-library').hidden=true;
  const version=++renderVersion;liveRenderer?.cancel();invalidateLevels();
- updateControls();save();
+ updateControls();if(persist)save();
  const name=state.comparing?state.reference:state.selected, scene=state.scene, comparing=state.comparing;
  const path=imagePath(name,scene);
+ $('preview-loading').hidden=true;
+ $('preview-loading').textContent=`Preparing ${byScene.get(scene)?.label||'scene'} · ${byName.get(name)?.stem||'original'}…`;$('stage').setAttribute('aria-busy','true');
+ // Cached previews finish before this delay: avoid flashing a loader while sweeping looks.
+ const loadingTimer=thumbnailScene===scene||loadedImages.has(path)?undefined:setTimeout(()=>{if(version===renderVersion)$('preview-loading').hidden=false;},180);
  try {
-  await loadImage(path);
+  const image=loadImage(path);if(thumbnailScene!==scene||allTiles.some(tile=>tile.classList.contains('preview-failed')))refreshSceneAssets();
+  await image;
   if (version!==renderVersion) return;
   $('filename').textContent=label(name);updateDescription(name);
   const r=byName.get(name);
@@ -234,11 +239,11 @@ async function render() {
   displayedLevelsVersion=version;updateLevels();
  } catch (error) {
   if(version===renderVersion) { $('filename').textContent='Preview could not load';$('look-detail').textContent=error.message; }
- }
+ } finally {clearTimeout(loadingTimer);if(version===renderVersion){$('preview-loading').hidden=true;$('stage').setAttribute('aria-busy','false');}}
 }
 function select(name,{reveal=false}={}) {
  if ((!byName.has(name) && name!=='') || !canUseLut(name)) return;
- if (state.selected===name && !state.comparing) return;
+ if (state.selected===name && !state.comparing&&!allTiles.some(tile=>tile.dataset.name===name&&tile.classList.contains('preview-failed'))) return;
  state.selected=name;state.selectedLook=byName.has(name)?lookNavigation.family(byName.get(name)):'';state.comparing=false;render();
  if (reveal && name) allTiles.find(tile=>tile.dataset.name===name).scrollIntoView({block:'nearest',inline:'nearest'});
 }
@@ -291,9 +296,7 @@ $('filter-all').addEventListener('click',()=>filterFavourites(false));
 $('filter-favourites').addEventListener('click',()=>filterFavourites(true));
 $('scene').addEventListener('change',event=>{
  state.scene=event.target.value;
- $('raw-thumb').src=imagePath('');
- for (const tile of tiles.querySelectorAll('.tile')) tile.querySelector('img').src=imagePath(canUseLut(tile.dataset.name)?tile.dataset.name:'');
- warmScene(state.scene);render();
+ render();
 });
 allTiles.forEach(tile=>tile.addEventListener('click',()=>{if(!lutReorderMode)select(tile.dataset.name);}));
 
@@ -470,9 +473,13 @@ $('settings-file').addEventListener('change',async event=>{
  try{const saved=JSON.parse(await file.text());if(saved.version!==1||!saved.state||typeof saved.state!=='object')throw new Error('Choose a LUT Buddy settings backup.');
   try{localStorage.setItem('ellis-lut-explorer-before-import',JSON.stringify(state));}catch{}
   state.adjustments={};restorePreferences(saved.state);state.comparing=false;applyTheme();$('reference').value=state.reference;
-  $('raw-thumb').src=imagePath('');for(const tile of tiles.querySelectorAll('.tile'))tile.querySelector('img').src=imagePath(canUseLut(tile.dataset.name)?tile.dataset.name:'');warmScene(state.scene);await render();$('backup-status').textContent='Settings restored.';
+  thumbnailScene=null;await render();$('backup-status').textContent='Settings restored.';
  }catch(error){$('backup-status').textContent=error.message;}finally{event.target.value='';}
 });
+// Shared favourites/adjustments synchronize; an open tab keeps its own view.
+function retainView(incoming,local){
+ const result={...incoming};for(const key of ['scene','sceneCollection','sceneDevice','selectedLook','referenceLook','selected','reference','comparing','favouritesOnly'])if(Object.hasOwn(local,key))result[key]=local[key];return result;
+}
 function mergeSettings(base,local,remote){
  const result=JSON.parse(JSON.stringify(remote));
  const oldFav=new Set(base?.favourites||[]),newFav=new Set(local.favourites),remoteFav=new Set(remote.favourites||[]);
@@ -481,7 +488,7 @@ function mergeSettings(base,local,remote){
  result.favourites=[...remoteFav];result.adjustments=result.adjustments||{};
  for(const [id,a] of Object.entries(local.adjustments||{}))if(JSON.stringify(a)!==JSON.stringify(base?.adjustments?.[id]))result.adjustments[id]=a;
  for(const key of ['scene','sceneCollection','sceneDevice','selectedLook','referenceLook','selected','reference','favouritesOnly','theme','cameraInfo','histogram','stripVisible','lutOrder'])if(local[key]!==base?.[key])result[key]=local[key];
- return result;
+ return retainView(result,local);
 }
 async function persistProject(){
  if(savingProject||!pendingPrefs)return;savingProject=true;
@@ -494,18 +501,37 @@ async function persistProject(){
     pendingPrefs=mergeSettings(lastSharedState,pendingPrefs||snapshot,data.state);projectRevision=data.revision;lastSharedState=data.state;
     // Publish the merge before waiting for the retry. Otherwise the next gesture
     // can save stale favourites as deletions against the new shared revision.
-    restorePreferences(pendingPrefs);applyTheme();refreshSceneAssets();render();continue;
+    restorePreferences(pendingPrefs);applyTheme();render({persist:false});continue;
    }
    if(!response.ok)throw new Error(data.error||'Project save unavailable');
    projectRevision=data.revision;lastSharedState=snapshot;
-   if(pendingPrefs){restorePreferences(pendingPrefs);applyTheme();refreshSceneAssets();render();}
-   else{restorePreferences(snapshot);applyTheme();refreshSceneAssets();updateControls();}
+   if(pendingPrefs){restorePreferences(pendingPrefs);applyTheme();render({persist:false});}
+   else{restorePreferences(retainView(snapshot,state));applyTheme();updateControls();}
    if(!pendingPrefs){try{localStorage.removeItem(preferenceKey+'-pending');}catch{}$('save-status').textContent='';$('backup-status').textContent='Saved to this project folder.';}
   }
  }catch(error){$('save-status').textContent='Saved in this browser only · project save unavailable';$('backup-status').textContent=error.message;}
  finally{savingProject=false;}
 }
-function refreshSceneAssets(){$('raw-thumb').src=imagePath('');for(const tile of tiles.querySelectorAll('.tile'))tile.querySelector('img').src=imagePath(canUseLut(tile.dataset.name)?tile.dataset.name:'');warmScene(state.scene);}
+let thumbnailScene=null,thumbnailVersion=0;
+function refreshSceneAssets(){
+ const scene=state.scene,version=++thumbnailVersion;thumbnailScene=scene;
+ const active=allTiles.filter(tile=>!tile.dataset.name||canUseLut(tile.dataset.name,scene));
+ // Keep the current row visible until the new scene's row is ready, then swap
+ // together. Only a tile with no image yet needs an initial placeholder.
+ const pending=active.map(tile=>{
+  const img=tile.querySelector('img'),path=imagePath(tile.dataset.name,scene);
+  tile.classList.toggle('preview-pending',!img.getAttribute('src'));tile.classList.remove('preview-failed');
+  return loadImage(path).then(()=>({tile,img,path}),()=>({tile,img,path,failed:true}));
+ });
+ Promise.all(pending).then(results=>{
+  if(version!==thumbnailVersion)return;
+  for(const {tile,img,path,failed} of results){
+   if(failed)img.removeAttribute('src');else img.src=path;
+   tile.classList.remove('preview-pending');tile.classList.toggle('preview-failed',!!failed);
+  }
+ });
+ warmScene(scene);
+}
 async function loadProjectSettings(){
  if(loadingProject||savingProject)return;loadingProject=true;const startedRevision=projectRevision;
  try{
@@ -515,8 +541,8 @@ async function loadProjectSettings(){
   if(projectReady&&data.revision===projectRevision&&!pendingPrefs)return;
   projectRevision=data.revision;lastSharedState=data.state;
   let incoming=data.state;if(data.initial_import&&hadBrowserPreferences){incoming={...data.state,...state,favourites:[...new Set([...(data.state.favourites||[]),...state.favourites])],adjustments:{...(data.state.adjustments||{}),...state.adjustments}};}try{const cached=JSON.parse(localStorage.getItem(preferenceKey+'-pending'));if(cached?.state)incoming=data.state?mergeSettings(cached.base,cached.state,data.state):cached.state;}catch{}
-  if(incoming){restorePreferences(incoming);applyTheme();$('reference').value=state.reference;refreshSceneAssets();}
-  projectReady=true;await render();
+  if(incoming){restorePreferences(retainView(incoming,state));applyTheme();$('reference').value=state.reference;}
+  projectReady=true;await render({persist:false});
  }catch{projectReady=false;$('backup-status').textContent='Project saving is unavailable. Keep this tab open and restart the local service.';}
  finally{loadingProject=false;}
 }
@@ -572,7 +598,6 @@ function updateLevels(){
   }catch(error){if(job===levelsJob){$('levels').setAttribute('aria-busy','false');$('levels-status').textContent=error.message;$('levels-output-label').textContent='Unavailable';}}
  },40);
 }
-$('raw-thumb').src=imagePath('');
-warmScene(state.scene);render();updateScrollButtons();
+render();updateScrollButtons();
 requestAnimationFrame(()=>allTiles.find(tile=>tile.dataset.name===state.selected)?.scrollIntoView({block:'nearest',inline:'nearest'}));
 loadProjectSettings();

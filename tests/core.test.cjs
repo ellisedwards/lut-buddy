@@ -211,3 +211,29 @@ test('Legacy Sony gallery cannot bypass compatibility after a clip profile chang
  preview=await fetch(app.url+'/previews/saved/look',{headers});assert.equal(preview.status,400);assert.match(await preview.text(),/Confirm.*profile/);
  }finally{if(app)await app.close();fs.rmSync(root,{recursive:true,force:true});}
 });
+
+test('New footage precedes saved demo ordering without changing manual or collection orders',async()=>{
+ const order=require('../src/scene-order.cjs'),vm=require('node:vm'),root=fs.mkdtempSync(path.join(os.tmpdir(),'lut-new-scene-order-')),s=await Store.open(root),project=s.state().projects[0].id;
+ try{
+  s.change(()=>{for(const [id,meta]of [['demo-clip',{legacy:true}],['personal-clip',{}]])s.db.run('INSERT INTO clips VALUES (?,?,?,?,?,?)',[id,project,id,'unused','rec709',JSON.stringify(meta)]);for(const [id,clip]of [['demo-a','demo-clip'],['demo-b','demo-clip'],['old','personal-clip'],['apple-demo','personal-clip']])s.db.run('INSERT INTO scenes(id,project_id,clip_id,name,frame_index,pts,time_base,asset,thumb,sha256) VALUES (?,?,?,?,?,?,?,?,?,?)',[id,project,clip,id,0,'0','1/24','frame.png','thumb.jpg',id]);s.db.run('UPDATE scenes SET details=? WHERE id=?',[JSON.stringify({demo:true}),'apple-demo']);s.db.run('INSERT INTO collections VALUES (?,?,?)',['one',project,'One']);});
+  order.reorder(s,{projectId:project,ids:['apple-demo','demo-b','old','demo-a']});order.membership(s,{sceneIds:['old','demo-a'],collectionId:'one',action:'add'});order.reorder(s,{projectId:project,collectionId:'one',ids:['demo-a','old']});const stored=s.state().sceneOrders;
+  s.change(()=>{for(const id of ['new-one','new-two'])s.db.run('INSERT INTO scenes(id,project_id,clip_id,name,frame_index,pts,time_base,asset,thumb,sha256) VALUES (?,?,?,?,?,?,?,?,?,?)',[id,project,'personal-clip',id,0,'0','1/24','frame.png','thumb.jpg',id]);});
+  assert.deepEqual(order.orderedIds(s,project),['new-two','new-one','old','apple-demo','demo-b','demo-a']);assert.deepEqual(s.state().sceneOrders,stored);assert.deepEqual(order.orderedIds(s,project,'one'),['demo-a','old']);
+  const picker=fs.readFileSync(require.resolve('../ui/scene-picker.js'),'utf8'),body=picker.slice(picker.indexOf(' function orderIds('),picker.indexOf(' const visibleIds=')),ids=order.orderedIds(s,project),context=vm.createContext({boot:{projectId:project},data:s.state(),sceneMap:new Map(ids.map(id=>[id,{clip:id.startsWith('demo')?undefined:'personal.mov',demo:id==='apple-demo'}])),available:new Set(ids),baseOrder:['old','new-one','new-two','apple-demo','demo-a','demo-b']});vm.runInContext(body,context);assert.deepEqual(Array.from(vm.runInContext('orderIds()',context)),ids);assert.deepEqual(Array.from(vm.runInContext("orderIds('one')",context)),['demo-a','old']);
+  order.reorder(s,{projectId:project,ids:['apple-demo','demo-b','old','demo-a','new-one','new-two']});assert.deepEqual(order.orderedIds(s,project),['old','new-one','new-two','apple-demo','demo-b','demo-a']);
+ }finally{s.close();fs.rmSync(root,{recursive:true,force:true});}
+});
+
+test('An already saved preview bypasses a busy background preview generation queue',async()=>{
+ const vm=require('node:vm'),source=fs.readFileSync(require.resolve('../src/server.cjs'),'utf8'),body=source.slice(source.indexOf(' async function rendered('),source.indexOf(' async function rebuildClipMetadata('));
+ let release,started=false;const held=new Promise(resolve=>release=resolve),files=new Set(['cache/frame-ready-preview-v2.jpg']);
+ const context=vm.createContext({cachedWork:fn=>fn(),scene:()=>({id:'scene',clip_id:'clip',sha256:'frame',asset:'source.png',details:'{}'}),clip:()=>({profile:'apple-log'}),store:{one:(sql,[id])=>({sha256:id,asset:id+'.cube',details:'{}'})},compatible:()=>({ok:true}),asset:p=>p,fs:{existsSync:p=>files.has(p)},renderQueue:Promise.resolve(),previewLifetime:{signal:undefined},media:{renderLutPreview:async(a,b,d)=>{started=true;await held;files.add(d);}}});
+ vm.runInContext(body,context);const generating=vm.runInContext("rendered('scene','cold')",context);await new Promise(r=>setImmediate(r));assert.equal(started,true);
+ try{const ready=await Promise.race([vm.runInContext("rendered('scene','ready')",context),new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('A cached preview waited for unrelated generation')),100);timer.unref();})]);assert.equal(ready,'cache/frame-ready-preview-v2.jpg');}finally{release();await generating;}
+});
+
+test('Graceful shutdown closes an unfinished browser connection and releases the library writer',async()=>{
+ const {startServer}=require('../src/server.cjs'),net=require('node:net'),root=fs.mkdtempSync(path.join(os.tmpdir(),'lut-server-shutdown-')),app=await startServer({root,port:0}),address=app.server.address(),socket=net.connect(address.port,'127.0.0.1');let timeout;
+ try{await new Promise((resolve,reject)=>{socket.once('connect',resolve);socket.once('error',reject);});socket.write(`GET /api/health HTTP/1.1\r\nHost: 127.0.0.1:${address.port}\r\n`);await new Promise(r=>setImmediate(r));await Promise.race([app.close(),new Promise((_,reject)=>timeout=setTimeout(()=>reject(Error('Shutdown stayed blocked by browser connection')),1500))]);clearTimeout(timeout);const reopened=await Store.open(root);reopened.close();}
+ finally{clearTimeout(timeout);socket.destroy();await app.close();fs.rmSync(root,{recursive:true,force:true});}
+});

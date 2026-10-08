@@ -3,11 +3,13 @@ function orderedIds(store,projectId,collectionId=''){
  store.one('SELECT id FROM projects WHERE id=?',[projectId]);
  if(collectionId&&store.one('SELECT project_id FROM collections WHERE id=?',[collectionId]).project_id!==projectId)throw new Error('Collection belongs to another project.');
  const rows=store.query('SELECT s.id,s.details,c.metadata FROM scenes s JOIN clips c ON c.id=s.clip_id WHERE s.project_id=? AND s.deleted=0 ORDER BY s.rowid',[projectId]);
- const footage=row=>!!JSON.parse(row.details).clip||!JSON.parse(row.metadata).legacy;
- let ids=[...rows.filter(footage),...rows.filter(row=>!footage(row))].map(row=>row.id);
+ const footage=row=>{const details=JSON.parse(row.details);return !details.demo&&(!!details.clip||!JSON.parse(row.metadata).legacy);};
+ let ids=[...(collectionId?rows.filter(footage):rows.filter(footage).reverse()),...rows.filter(row=>!footage(row))].map(row=>row.id);
  if(collectionId){const members=new Set(store.query('SELECT scene_id FROM memberships WHERE collection_id=?',[collectionId]).map(row=>row.scene_id));ids=ids.filter(id=>members.has(id));}
  const positions=new Map(store.query('SELECT scene_id,position FROM scene_orders WHERE project_id=? AND scope=?',[projectId,collectionId]).map(row=>[row.scene_id,row.position]));
- return ids.sort((a,b)=>(positions.get(a)??Infinity)-(positions.get(b)??Infinity));
+ const personal=new Set(rows.filter(footage).map(row=>row.id));
+ const rank=id=>positions.get(id)??(!collectionId&&personal.has(id)?-1:Infinity);
+ return ids.sort((a,b)=>(collectionId?0:Number(personal.has(b))-Number(personal.has(a)))||rank(a)-rank(b));
 }
 function reorder(store,{projectId,collectionId='',ids}){
  const current=orderedIds(store,projectId,collectionId);

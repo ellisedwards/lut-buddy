@@ -49,6 +49,8 @@ async function startServer({root=process.env.LUT_EXPLORER_DATA||path.join(os.hom
   if(sd.legacy&&ld.legacy&&clip(value.clip_id).profile==='sony-slog3-sgamut3cine')return `gallery/${value.id}/${ld.code}.jpg`;
   const check=compatible(clip(value.clip_id).profile,lut);if(!check.ok)throw new Error(check.reason);
   const thumb=`cache/${value.sha256}-${lut.sha256}-preview-v2.jpg`;
+  // Ready previews must not wait behind unrelated background generation.
+  if(fs.existsSync(asset(thumb)))return thumb;
   const work=renderQueue.then(async()=>{if(!fs.existsSync(asset(thumb)))await media.renderLutPreview(asset(value.asset),asset(lut.asset),asset(thumb),previewLifetime.signal);return thumb;});
   renderQueue=work.catch(()=>{});return work;
  });}
@@ -213,7 +215,7 @@ async function startServer({root=process.env.LUT_EXPLORER_DATA||path.join(os.hom
   }catch(error){if(!res.headersSent&&!res.destroyed)reply(res,400,{ok:false,error:error.name==='AbortError'?'Operation cancelled.':error.code==='ENOSPC'?'The disk is full. Free some space and retry; completed imports stay saved.':error.message});else res.destroy();}
  });
  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,'127.0.0.1',resolve);}).catch(error=>{if(error.code==='EADDRINUSE')throw new Error('The local port is already in use. Stop the existing service, or choose another LUT_EXPLORER_PORT.');throw error;});
- let closing;return {server,store,url:`http://127.0.0.1:${server.address().port}`,close:()=>closing??=(async()=>{operation?.abort();previewLifetime.abort();await Promise.allSettled([...previewBuilds.values(),...cacheTasks,renderQueue,...(operationDone?[operationDone]:[])]);await new Promise(resolve=>server.close(resolve));for(const d of downloads.values())await fsp.unlink(d.file).catch(()=>{});store.close();})()};
+ let closing;return {server,store,url:`http://127.0.0.1:${server.address().port}`,close:()=>closing??=(async()=>{operation?.abort();previewLifetime.abort();await Promise.allSettled([...previewBuilds.values(),...cacheTasks,renderQueue,...(operationDone?[operationDone]:[])]);await new Promise(resolve=>{server.close(resolve);server.closeAllConnections();});for(const d of downloads.values())await fsp.unlink(d.file).catch(()=>{});store.close();})()};
  }catch(error){store.close();throw error;}
 }
 if(require.main===module)startServer().then(result=>{console.log(`LUT Buddy is ready: ${result.url}\nLibrary: ${result.store.root}\nKeep this window open while using the viewer. Control+C stops it.`);for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>result.close().then(()=>process.exit(0)));}).catch(error=>{console.error(error.message);process.exitCode=1;});
