@@ -3,14 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>LUT Buddy</title>
-<link rel="stylesheet" href="viewer.css"><link rel="stylesheet" href="library.css">
+<title>LUT Pal</title>
+<link rel="icon" type="image/png" sizes="256x256" href="favicon.png">
+<link rel="stylesheet" href="viewer.css"><link rel="stylesheet" href="library.css"><link rel="stylesheet" href="inspection.css">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'">
 </head>
 <body>
 <main class="app">
  <header class="topbar">
-  <div class="brand"><h1>LUT Buddy</h1><button id="library-open" class="about-button" aria-label="Open library" title="Library"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><span id="scene-count" class="sr-only">43 looks · 24 scenes</span></div>
+  <div class="brand"><h1 class="brand-logo"><span class="sr-only">LUT Pal</span><img src="lut-pal-wordmark.png" alt="" aria-hidden="true" width="4173" height="976"></h1><button id="library-open" class="about-button" aria-label="Open library" title="Library"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><span id="scene-count" class="sr-only">43 looks · 24 scenes</span></div>
   <label class="compare-control scene-control" for="scene-picker-toggle"><span>Scene</span><select id="scene" aria-label="Choose a scene" hidden></select><button id="scene-picker-toggle" class="scene-picker-toggle" aria-haspopup="dialog" aria-expanded="false" aria-controls="scene-picker"><span class="scene-picker-selection"><small id="scene-picker-context" hidden></small><span id="scene-picker-title">Choose a scene</span></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></label>
   <label class="compare-control" for="reference"><span>Reference</span><select id="reference"></select></label>
   <div class="controls" aria-label="Preview controls">
@@ -19,12 +20,12 @@
   </div>
   <div class="header-utilities">
   <button id="theme" class="theme-button" aria-label="Switch to light theme" title="Light theme"><svg viewBox="0 0 24 24" aria-hidden="true"><path id="theme-icon" d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/><circle id="theme-sun" cx="12" cy="12" r="4"/></svg></button>
-   <button id="coffee-open" class="theme-button coffee-button" aria-label="Support LUT Buddy" aria-haspopup="dialog" aria-expanded="false" aria-controls="coffee-popover" title="Buy me a coffee"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h12v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8Z M16 9h2a3 3 0 0 1 0 6h-2 M3 21h16 M7 3v2 M11 2v3"/></svg></button>
+   <button id="coffee-open" class="theme-button coffee-button" aria-label="Support LUT Pal" aria-haspopup="dialog" aria-expanded="false" aria-controls="coffee-popover" title="Buy me a coffee"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h12v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8Z M16 9h2a3 3 0 0 1 0 6h-2 M3 21h16 M7 3v2 M11 2v3"/></svg></button>
   </div>
   <span id="save-status" role="status"></span>
  </header>
  <section id="coffee-popover" class="coffee-popover" role="dialog" aria-modal="false" aria-labelledby="coffee-title" data-donation-url="https://ellisedwards.com/donate" hidden>
-  <div class="coffee-heading"><strong id="coffee-title">Like LUT Buddy?</strong><button id="coffee-close" aria-label="Close donation popover">×</button></div>
+  <div class="coffee-heading"><strong id="coffee-title">Like LUT Pal?</strong><button id="coffee-close" aria-label="Close donation popover">×</button></div>
   <p>If it’s helping, consider buying me a coffee or two. Thanks for the support!</p>
   <a id="coffee-donate" class="coffee-donate" target="_blank" rel="noopener noreferrer" hidden>Buy me a coffee <span aria-hidden="true">↗</span></a><span id="coffee-coming-soon" class="coffee-coming-soon">Donations coming soon</span>
  </section>
@@ -32,12 +33,19 @@
   <button class="stage" id="stage" aria-label="Show comparison image" aria-pressed="false">
    <img id="preview" alt="Selected scene preview" draggable="false" hidden>
    <canvas id="live-preview" hidden aria-hidden="true"></canvas>
+   <canvas id="clipping-mask" hidden aria-hidden="true"></canvas>
    <span class="badge" id="badge"><span class="dot"></span><span id="badge-text">Selected LUT</span></span>
   </button>
   <div id="preview-loading" class="preview-loading" role="status" aria-live="polite" hidden>Preparing preview…</div>
+  <div id="inspection-view" class="inspection-view" hidden role="img" aria-label="Selected and reference comparison">
+   <div id="inspection-left" class="inspection-half"><canvas id="inspection-a"></canvas><canvas id="inspection-mask" hidden></canvas></div>
+   <div id="inspection-right" class="inspection-half"><canvas id="inspection-b"></canvas></div>
+   <div id="inspection-divider" class="inspection-divider" hidden></div><span id="inspection-selected-label" class="inspection-label"></span><span id="inspection-reference-label" class="inspection-label reference"></span>
+  </div>
   <div class="viewer-actions">
    <button id="strip-toggle" class="image-button" aria-label="Hide LUT strip" aria-pressed="true" aria-controls="lut-dock" title="Hide LUT strip"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v10H3ZM8 7v10M13 7v10M18 7v10"/></svg></button>
    <button id="histogram-toggle" class="image-button" aria-label="Show histogram" aria-pressed="false" aria-controls="levels" title="Histogram (H)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19h18M5 19v-5M9 19V7M13 19V4M17 19V9M21 19v-3"/></svg></button>
+   <button id="inspect-open" class="image-button" aria-label="Inspect comparison and exports" aria-expanded="false" aria-controls="inspect-panel" title="Inspect, zoom &amp; export"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6M10 7v6M7 10h6"/></svg></button>
    <button id="camera-info" class="image-button" aria-label="Show camera settings" aria-pressed="false" title="Camera settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l2-2h4l2 2h4v15H4V5Z"/><circle cx="12" cy="12" r="4"/></svg></button>
    <button id="adjust-open" class="image-button" aria-label="Show adjustments" aria-expanded="false" aria-controls="adjust-panel" title="Adjustments (E)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16M8 3v6M16 9v6M10 15v6"/></svg></button>
    <button id="favourite" class="favourite-button" aria-label="Add this LUT to favourites" aria-pressed="false" title="Add to favourites">☆</button>
@@ -52,7 +60,7 @@
  <div id="library-clips" hidden><button id="library-import-clips" class="library-wide">Import clips</button><button id="library-link-clips" class="library-wide">Link original clips…</button><button id="library-import-folder" class="library-wide">Import camera folder</button><p class="panel-note">Import copies clips into the library. Link leaves originals in place—keep those files available. Saved scenes stay in the library; linked originals are excluded from project exports and backups. Original videos stay local; connected AI can receive scene previews for automatic details.</p><div id="library-clip-list" class="library-list"></div></div>
  <div id="library-luts" hidden><div class="library-lut-actions"><button id="library-import-luts">Import LUTs</button></div><p class="panel-note">Original 3D CUBE files. Confirm what recording profile each LUT expects.</p><input id="library-lut-search" class="library-input" type="search" placeholder="Search LUTs" aria-label="Search library LUTs"><div class="library-field-row"><button id="library-select-luts">Select</button><button id="library-review-luts" class="library-icon-action" aria-label="Edit selected LUT details" title="Edit selected LUT details" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1 12-12a2.8 2.8 0 0 0-4-4L4 15v5Z"/></svg></button><button id="library-port-luts" class="library-icon-action" aria-label="Convert selected LUTs to a device" title="Convert selected LUTs to a device" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16m-4-4 4 4-4 4M20 17H4m4-4-4 4 4 4"/></svg></button></div><div id="library-lut-list" class="library-list"></div></div>
  <div class="library-project-actions"><button id="library-save-project">Save project</button><button id="library-open-project">Open project</button><input id="library-project-file" type="file" accept=".lutproject" hidden></div><div class="library-footer"><div class="library-field-row"><button id="library-undo" disabled>Undo</button><button id="library-redo" disabled>Redo</button></div><button id="library-restore-backup">Restore backup</button><button id="library-backup">Back up library</button><button id="library-ai">AI tools</button><button id="library-storage">Storage</button><span id="library-message" role="status"></span></div>
- <p id="library-lut-rights" class="library-rights" hidden>LUT Buddy is independent and not affiliated with camera or LUT makers. It grants no licenses. Use, adapt or share LUTs and footage only as permitted; you’re responsible for having the necessary rights.</p>
+ <p id="library-lut-rights" class="library-rights" hidden>LUT Pal is independent and not affiliated with camera or LUT makers. It grants no licenses. Use, adapt or share LUTs and footage only as permitted; you’re responsible for having the necessary rights.</p>
  <input id="library-clip-files" type="file" accept=".mp4,.mov,.mxf,.mkv,.mts,.m2ts,.avi,.webm,.xml" multiple hidden><input id="library-camera-folder" type="file" webkitdirectory multiple hidden><input id="library-lut-files" type="file" accept=".cube" multiple hidden>
 </section>
 <div id="library-progress" class="library-progress" hidden><span id="library-progress-text"></span><button id="library-cancel">Cancel</button></div>
@@ -81,11 +89,24 @@
    <div class="panel-buttons"><button title="Bypass / enable adjustments (B)" id="adjust-bypass" aria-pressed="false">Bypass</button><button id="adjust-reset">Reset</button><button id="save-image">Save PNG</button></div>
    <span id="adjust-status" role="status"></span><button id="about" class="settings-link">Settings &amp; backup</button>
   </section>
- <section id="levels" class="levels" aria-label="Original LOG and displayed preview RGB histograms" hidden title="Encoded RGB levels, all channels combined: 0% black to 100% white. Gray is untreated LOG; gold is the displayed preview, including adjustments. Vertical counts use a square-root scale.">
-  <div class="levels-heading"><span>RGB levels</span><span class="levels-key log-key">LOG</span><span class="levels-key output-key" id="levels-output-label">Output</span></div>
-  <canvas id="levels-plot" width="400" height="120" aria-label="Overlaid LOG and output levels"></canvas>
-  <div class="levels-axis" aria-hidden="true"><span>0</span><span>50</span><span>100%</span></div>
-  <span id="levels-status" class="sr-only" role="status"></span>
+ <section id="inspect-panel" class="adjust-panel inspect-panel" aria-label="Inspect and export" hidden>
+  <div class="panel-heading"><strong>Inspect &amp; export</strong><button id="inspect-close" aria-label="Close inspection">×</button></div>
+  <label for="inspection-mode">Compare with Reference</label><select id="inspection-mode"><option value="toggle">Toggle (existing Compare)</option><option value="wipe">Wipe</option><option value="split">Side by side</option></select>
+  <label id="wipe-control" hidden>Wipe position<input id="inspection-wipe" aria-label="Wipe position" type="range" min="0" max="100" value="50"></label>
+  <div class="inspection-buttons"><button id="inspection-fit" aria-pressed="true">Fit</button><button id="inspection-100" aria-pressed="false">100%</button></div>
+  <p class="panel-note">100% loads the original-resolution image. Drag to pan. Choose Fit to return to the normal view.</p>
+  <button id="export-full-png" class="export-button">Save full-resolution PNG</button><button id="export-adjusted-cube" class="export-button">Export adjusted CUBE</button>
+  <p class="panel-note">Exports the displayed look with enabled adjustments, or the selected side in Wipe / Side by side. The CUBE is a separate 33-point approximation for unadjusted footage in this scene’s recording profile.</p>
+  <span id="inspect-status" role="status"></span>
+ </section>
+ <section id="levels" class="levels" aria-label="Preview scopes" hidden>
+  <div class="levels-heading"><span>Scopes</span><span class="levels-key log-key">Original</span><span class="levels-key output-key" id="levels-output-label">Output</span><button id="scope-expand">Expand</button></div>
+  <div class="scope-controls"><select id="scope-mode" aria-label="Scope"><option value="histogram">Histogram · original/output</option><option value="rgb">RGB histogram</option><option value="waveform">Waveform</option><option value="parade">RGB parade</option><option value="vectorscope">Vectorscope</option></select><label id="scope-skin-label" hidden><input id="scope-skin" type="checkbox" checked>Skin guide</label></div>
+  <span id="scope-source" class="sr-only">Displayed preview</span><canvas id="levels-plot" width="400" height="120" aria-label="Preview signal scope"></canvas>
+  <div id="levels-axis" class="levels-axis" aria-hidden="true"><span>0</span><span>50</span><span>100%</span></div>
+  <div class="scope-warning-controls"><label><input id="clip-shadows" type="checkbox">Shadows</label><label><input id="clip-highlights" type="checkbox">Highlights</label></div>
+  <div class="scope-thresholds"><label>Black ≤ <input id="clip-low" aria-label="Black threshold percent" type="number" min="0" max="49" value="0">%</label><label>White ≥ <input id="clip-high" aria-label="White threshold percent" type="number" min="50" max="100" value="100">%</label></div>
+  <div id="scope-clipping"></div><div id="scope-channel-clipping"></div><p id="scope-note" class="scope-note"></p><span id="levels-status" class="sr-only" role="status"></span>
  </section>
  <div id="camera-strip" class="camera-strip" aria-label="Camera settings for this frame" hidden></div>
  <section id="lut-dock" class="dock" aria-label="Choose a LUT">
@@ -104,7 +125,7 @@
   <div id="look-description" class="look-description" aria-live="polite"></div>
  </div>
 </main>
-<dialog id="about-dialog"><h2>Keyboard shortcuts</h2><p>← / → · LUT &nbsp; ↑ / ↓ · Scene<br>F · Favourite &nbsp; A · All / Favourites<br>L · LUT strip &nbsp; C · Camera settings &nbsp; H · Histogram<br>E · Adjustments &nbsp; B · Bypass adjustments<br>M · Fullscreen &nbsp; T · Light / Dark theme<br>Space · Compare &nbsp; Esc · Close<br>? · Shortcuts &amp; settings</p><p>Shortcuts pause while using dropdowns, sliders or text fields.</p><h2>Your footage, every look</h2><p>A project can mix clips from multiple cameras. Each clip has its own recording curve and gamut; its scenes inherit that profile. Choose matching input and Rec.709 output profiles for imported LUTs in Library. Profiles are supplied by you: a CUBE file does not reliably identify them.</p><p>The local service copies imported footage into your library, decodes marked original frames and preserves your original CUBE files. Nothing is sent to a cloud. Saved scenes keep working without the original card.</p><p>Your migrated gallery keeps its existing previews, favourites and adjustments. Newly imported LUTs are applied directly when profiles match. Linked camera versions keep the same look selected across compatible scenes. Profile-adapted looks use published colour math; physical camera matching and calibrated display colour remain [Unverified]. Use Device in the scene picker to browse one camera or all devices. Exposure and source balance currently use the Sony S-Log3 curve; those source controls are unavailable for other profiles. Contrast and saturation remain available.</p><p>Favourites and adjustments save automatically. Library → Save project downloads footage, scenes, collections, LUTs and adjustments in one project file. Open project and Restore backup open separate copies. Undo / Redo in Library or ⌘Z / ⇧⌘Z reverse names, descriptions, profiles, collection edits, ordering and scene removal. Use Back up library for a copy of the entire library; the buttons below export and restore viewer settings only.</p><div class="backup-buttons"><button id="backup-settings">Back up settings</button><button id="restore-settings">Restore settings</button><input id="settings-file" type="file" accept=".json,application/json"></div><span id="backup-status" role="status"></span><button id="close-about">Close</button></dialog>
+<dialog id="about-dialog"><h2>Keyboard shortcuts</h2><p>← / → · LUT &nbsp; ↑ / ↓ · Scene<br>F · Favourite &nbsp; A · All / Favourites<br>L · LUT strip &nbsp; C · Camera settings &nbsp; H · Histogram<br>E · Adjustments &nbsp; B · Bypass adjustments<br>M · Fullscreen &nbsp; T · Light / Dark theme<br>Space · Compare &nbsp; Esc · Close<br>? · Shortcuts &amp; settings</p><p>Shortcuts pause while using dropdowns, sliders or text fields.</p><h2>Your footage, every look</h2><p>A project can mix clips from multiple cameras. Each clip has its own recording curve and gamut; its scenes inherit that profile. Choose matching input and Rec.709 output profiles for imported LUTs in Library. Profiles are supplied by you: a CUBE file does not reliably identify them.</p><p>The local service copies imported footage into your library, decodes marked original frames and preserves your original CUBE files. Footage and storage stay local. Optional AI suggestions send selected previews and details to your chosen provider. Saved scenes keep working without the original card.</p><p>Your migrated gallery keeps its existing previews, favourites and adjustments. Newly imported LUTs are applied directly when profiles match. Linked camera versions keep the same look selected across compatible scenes. Profile-adapted looks use published colour math; physical camera matching and calibrated display colour remain [Unverified]. Use Device in the scene picker to browse one camera or all devices. Exposure and relative source balance use published curves for supported recording profiles. Confirm unknown profiles before using those controls. Contrast and saturation remain available.</p><p>Favourites and adjustments save automatically. Library → Save project downloads footage, scenes, collections, LUTs and adjustments in one project file. Open project and Restore backup open separate copies. Undo / Redo in Library or ⌘Z / ⇧⌘Z reverse names, descriptions, profiles, collection edits, ordering and scene removal. Use Back up library for a copy of the entire library; the buttons below export and restore viewer settings only.</p><div class="backup-buttons"><button id="backup-settings">Back up settings</button><button id="restore-settings">Restore settings</button><input id="settings-file" type="file" accept=".json,application/json"></div><span id="backup-status" role="status"></span><button id="close-about">Close</button></dialog>
 <section id="scene-picker" class="scene-picker" role="dialog" aria-label="Browse scenes and collections" hidden>
  <div class="scene-picker-heading"><strong>Scenes</strong><input id="scene-picker-search" type="search" placeholder="Find a scene" aria-label="Find a scene"><button id="scene-picker-select" class="scene-picker-select" aria-pressed="false">Select</button><button id="scene-picker-close" aria-label="Close scene picker">×</button></div>
  <label class="scene-picker-device"><span>Device</span><select id="scene-picker-device" aria-label="Browse scenes by device"><option value="">All devices</option></select></label>
@@ -124,10 +145,14 @@
 <script type="application/json" id="product-boot">__BOOT__</script>
 <dialog id="restore-dialog"><h2>Restore a project</h2><p>Open a separate copy from a library backup.</p><label>Backup<select id="restore-backup" class="library-input"></select></label><label>Project<select id="restore-project" class="library-input"></select></label><div class="library-field-row"><button id="restore-close">Cancel</button><button id="restore-open">Open copy</button></div><p id="restore-status" class="panel-note" role="status"></p></dialog>
 <script src="source-curves.js"></script>
+<script src="look-math.js"></script>
+<script src="scope-math.js"></script>
 <script src="preview-renderer.js"></script>
 <script src="levels-histogram.js"></script>
 <script src="look-navigation.js"></script>
 <script src="explorer-overlay.js"></script>
+<script src="scope-panel.js"></script>
+<script src="inspection.js"></script>
 <script src="scene-picker.js"></script>
 <script src="library.js"></script>
 <script src="ai.js"></script>

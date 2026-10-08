@@ -17,7 +17,7 @@ builds have different terms. The npm wrapper's licence is not proof of the
 binary's licence. Any future bundled/offline installer needs a separate binary
 licence and corresponding-source review. See THIRD_PARTY.md.
 
-Updating: stop LUT Buddy with Control+C, keep the existing library folder,
+Updating: stop LUT Pal with Control+C, keep the existing library folder,
 replace/update the source, then launch again. The launcher refuses to silently
 reuse a service from an older source build. Database migrations keep a backup;
 a library written by a newer schema version must not open in an older build.

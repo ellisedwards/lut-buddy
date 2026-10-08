@@ -16,7 +16,7 @@ Adapted 2026-10-05 from Ellis's existing source:
   directory, official-tool account status, isolated Codex configuration,
   structured response handling and process-group termination on cancellation.
 
-The source repositories are read-only references. LUT Buddy has no import or
+The source repositories are read-only references. LUT Pal has no import or
 runtime path into either repository. The official binaries are installed
 separately; they retain authentication ownership. No credential files are read
 by this module. Unlike the prototypes' subscription-only environment filtering,

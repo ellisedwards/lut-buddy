@@ -210,7 +210,7 @@ function updateControls() {
 async function render({persist=true}={}) {
  if(!scenes.length){preview.hidden=true;preview.removeAttribute('src');$('live-preview').hidden=true;$('filename').textContent='Your footage, your looks';$('look-detail').textContent='Open Library to import a clip and mark your scenes.';$('empty-library').hidden=false;return;}
  $('empty-library').hidden=true;
- const version=++renderVersion;liveRenderer?.cancel();invalidateLevels();
+ const version=++renderVersion;liveRenderer?.cancel();globalThis.LUTInspection?.invalidate();invalidateLevels();
  updateControls();if(persist)save();
  const name=state.comparing?state.reference:state.selected, scene=state.scene, comparing=state.comparing;
  const path=imagePath(name,scene);
@@ -236,7 +236,7 @@ async function render({persist=true}={}) {
   // Publish only the finished preview. Keep the previous surface during loading.
   preview.src=path;preview.alt=`${byScene.get(scene).label} · ${label(name)}`;
   $('live-preview').hidden=!adjusted;preview.hidden=adjusted;
-  displayedLevelsVersion=version;updateLevels();
+  displayedLevelsVersion=version;updateLevels();globalThis.LUTInspection?.update(globalThis.LUTProduct.getView());
  } catch (error) {
   if(version===renderVersion) { $('filename').textContent='Preview could not load';$('look-detail').textContent=error.message; }
  } finally {clearTimeout(loadingTimer);if(version===renderVersion){$('preview-loading').hidden=true;$('stage').setAttribute('aria-busy','false');}}
@@ -247,7 +247,7 @@ function select(name,{reveal=false}={}) {
  state.selected=name;state.selectedLook=byName.has(name)?lookNavigation.family(byName.get(name)):'';state.comparing=false;render();
  if (reveal && name) allTiles.find(tile=>tile.dataset.name===name).scrollIntoView({block:'nearest',inline:'nearest'});
 }
-function compare() { state.comparing=!state.comparing;render(); }
+function compare() { if(globalThis.LUTInspection?.hasComparison())globalThis.LUTInspection.setCompareMode('toggle');state.comparing=!state.comparing;render(); }
 // Native select menus have no open-state API. Track activation and consume the
 // dismissal gesture before it can reach the preview or another action.
 let activeDropdown=null,dropdownDismissClick=false;
@@ -441,21 +441,7 @@ $('adjust-bypass').addEventListener('click',()=>{const a=sceneAdjustments();a.en
 $('auto-balance').addEventListener('click',async()=>{const button=$('auto-balance'),scene=state.scene;button.disabled=true;$('adjust-status').textContent='Estimating neutral balance…';try{if(!liveRenderer)liveRenderer=new window.LUTPreviewRenderer($('live-preview'));const balance=await liveRenderer.autoBalance(byScene.get(scene));if(scene!==state.scene)return;Object.assign(sceneAdjustments(),balance,{enabled:true});await render();$('adjust-status').textContent='Estimated balance · refine with the colour sliders.';}catch(error){$('adjust-status').textContent=error.message;}finally{updateAdjustmentControls();}});
 $('adjust-reset').addEventListener('click',()=>{state.adjustments[state.scene]=cleanAdjustments();render();});
 function downloadBlob(blob,filename){const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=filename;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);}
-$('save-image').addEventListener('click',async()=>{
- const button=$('save-image');button.disabled=true;
- try{
-  const snapshot=JSON.stringify([state.scene,state.selected,state.reference,state.comparing,sceneAdjustments()]);
-  await render();
-  if(snapshot!==JSON.stringify([state.scene,state.selected,state.reference,state.comparing,sceneAdjustments()]))throw new Error('Preview changed. Save again when ready.');
-  if($('look-detail').textContent.includes('adjustments unavailable'))throw new Error('Adjustments could not render. Bypass them to save the original.');
-  let canvas=$('live-preview');if(canvas.hidden){canvas=document.createElement('canvas');canvas.width=byScene.get(state.scene).preview_width||1280;canvas.height=byScene.get(state.scene).preview_height||720;canvas.getContext('2d').drawImage(preview,0,0,canvas.width,canvas.height);}
-  const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw new Error('Image could not be saved.');
-  if(snapshot!==JSON.stringify([state.scene,state.selected,state.reference,state.comparing,sceneAdjustments()]))throw new Error('Preview changed. Save again when ready.');
-  const name=state.comparing?state.reference:state.selected,a=sceneAdjustments();
-  downloadBlob(blob,`${state.scene}_${name?byName.get(name).stem:'LOG'}${a.enabled&&hasAdjustment(a)?'_Adjusted':''}.png`);
-  $('adjust-status').textContent='PNG saved · source image and LUT unchanged.';
- }catch(error){$('adjust-status').textContent=error.message;}finally{button.disabled=false;}
-});
+$('save-image').addEventListener('click',event=>globalThis.LUTInspection?.exportView('png',event.currentTarget));
 function isFullscreen(){return document.fullscreenElement===$('viewer')||$('viewer').classList.contains('expanded');}
 function syncFullscreen(){const full=isFullscreen();$('fullscreen').setAttribute('aria-pressed',String(full));$('fullscreen').setAttribute('aria-label',full?'Exit fullscreen':'Enter fullscreen');$('fullscreen').title=full?'Exit fullscreen (M / Esc)':'Fullscreen (M)';$('fullscreen-icon').setAttribute('d',full?'M4 9h5V4M20 9h-5V4M9 20v-5H4M15 20v-5h5':'M9 4H4v5M15 4h5v5M4 15v5h5M20 15v5h-5');}
 $('fullscreen').addEventListener('click',async()=>{
@@ -470,7 +456,7 @@ $('backup-settings').addEventListener('click',()=>{downloadBlob(new Blob([JSON.s
 $('restore-settings').addEventListener('click',()=>$('settings-file').click());
 $('settings-file').addEventListener('change',async event=>{
  const file=event.target.files[0];if(!file)return;
- try{const saved=JSON.parse(await file.text());if(saved.version!==1||!saved.state||typeof saved.state!=='object')throw new Error('Choose a LUT Buddy settings backup.');
+ try{const saved=JSON.parse(await file.text());if(saved.version!==1||!saved.state||typeof saved.state!=='object')throw new Error('Choose a LUT Pal settings backup.');
   try{localStorage.setItem('ellis-lut-explorer-before-import',JSON.stringify(state));}catch{}
   state.adjustments={};restorePreferences(saved.state);state.comparing=false;applyTheme();$('reference').value=state.reference;
   thumbnailScene=null;await render();$('backup-status').textContent='Settings restored.';
@@ -562,9 +548,9 @@ function positionLevels(){
  const stacked=visible&&!strip.hidden&&$('viewer').clientWidth<740;
  strip.style.right=(visible&&!stacked?inset+box.offsetWidth+20:inset)+'px';
  box.style.bottom=(base+(stacked?strip.offsetHeight+10:0))+'px';
- if(visible&&lastLevelPlot)window.LUTLevels.draw($('levels-plot'),lastLevelPlot.original,lastLevelPlot.output,state.theme==='light');
+ if(visible&&lastLevelPlot&&!globalThis.LUTScopePanel)window.LUTLevels.draw($('levels-plot'),lastLevelPlot.original,lastLevelPlot.output,state.theme==='light');
 }
-function invalidateLevels(){levelsJob++;clearTimeout(levelsTimer);lastLevelPlot=null;$('levels-plot').getContext('2d').clearRect(0,0,400,120);$('levels-status').textContent='Updating levels';}
+function invalidateLevels(){globalThis.LUTScopePanel?.invalidate();levelsJob++;clearTimeout(levelsTimer);lastLevelPlot=null;if(!globalThis.LUTScopePanel)$('levels-plot').getContext('2d').clearRect(0,0,400,120);$('levels-status').textContent='Updating levels';}
 function originalLevels(scene){
  const key=scene.id+'/'+scene.actual_seconds;
  if(!originalLevelCache.has(key))originalLevelCache.set(key,(async()=>{
@@ -581,6 +567,7 @@ function originalLevels(scene){
  return originalLevelCache.get(key);
 }
 function updateLevels(){
+ if(globalThis.LUTScopePanel){positionLevels();if(displayedLevelsVersion===renderVersion)globalThis.LUTScopePanel.update(globalThis.LUTProduct.getView());return;}
  const job=++levelsJob;clearTimeout(levelsTimer);positionLevels();
  if($('levels').hidden||displayedLevelsVersion!==renderVersion)return;
  const scene=state.scene,name=state.comparing?state.reference:state.selected,version=renderVersion;
@@ -598,6 +585,12 @@ function updateLevels(){
   }catch(error){if(job===levelsJob){$('levels').setAttribute('aria-busy','false');$('levels-status').textContent=error.message;$('levels-output-label').textContent='Unavailable';}}
  },40);
 }
+Object.assign(window.LUTProduct,{
+ getView:()=>!scenes.length||displayedLevelsVersion!==renderVersion?null:({scene:byScene.get(state.scene),record:byName.get(state.comparing?state.reference:state.selected),selected:byName.get(state.selected),reference:byName.get(state.reference),adjustments:{...sceneAdjustments()},comparing:state.comparing,surface:preview.hidden?$('live-preview'):preview,version:renderVersion}),
+ getImage:(name,scene)=>loadImage(imagePath(name,scene)),hasAdjustments:hasAdjustment,positionScopes:positionLevels,
+ hideAdjustments:()=>showAdjustmentPanel(false),
+ resetCompare:()=>{if(state.comparing){state.comparing=false;render();}}
+});
 render();updateScrollButtons();
 requestAnimationFrame(()=>allTiles.find(tile=>tile.dataset.name===state.selected)?.scrollIntoView({block:'nearest',inline:'nearest'}));
 loadProjectSettings();

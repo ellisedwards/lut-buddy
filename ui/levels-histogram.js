@@ -17,7 +17,7 @@ window.LUTLevels = {
   for(const fraction of [0,.5,1]){const x=pad+fraction*(w-pad*2);ctx.beginPath();ctx.moveTo(x,pad);ctx.lineTo(x,h-pad);ctx.stroke();}
   const trace=(counts,colour,fill)=>{
    ctx.beginPath();
-   counts.forEach((count,i)=>{const x=pad+i/127*(w-pad*2),y=h-pad-Math.sqrt(count)/root*(h-pad*2);if(i)ctx.lineTo(x,y);else ctx.moveTo(x,y);});
+   counts.forEach((count,i)=>{const x=pad+i/(counts.length-1)*(w-pad*2),y=h-pad-Math.sqrt(count)/root*(h-pad*2);if(i)ctx.lineTo(x,y);else ctx.moveTo(x,y);});
    ctx.strokeStyle=colour;ctx.lineWidth=2.5;ctx.stroke();
    ctx.lineTo(w-pad,h-pad);ctx.lineTo(pad,h-pad);ctx.closePath();ctx.fillStyle=fill;ctx.fill();
   };

@@ -64,7 +64,39 @@ async function startServer({root=process.env.LUT_EXPLORER_DATA||path.join(os.hom
   }finally{if(!committed)for(const value of staged)for(const key of ['full','thumb','raw'])await fsp.unlink(asset(value[key])).catch(()=>{});}
  }
  const projectFiles=require('./project-files.cjs'),downloads=new Map();
+ function exportContext({projectId,sceneId,lutId='',adjustments={}}){
+  const value=scene(sceneId);if(value.project_id!==projectId)throw Error('Scene belongs to another project.');
+  const source=clip(value.clip_id),lut=lutId?store.one('SELECT * FROM luts WHERE id=?',[lutId]):undefined;
+  if(lut){const check=compatible(source.profile,lut);if(!check.ok)throw Error(check.reason);}
+  const a=require('../ui/look-math.js').settings(adjustments);
+  if((a.exposure||a.warmth||a.tint)&&!require('../ui/source-curves.js').forProfile(source.profile))throw Error('Confirm a supported recording profile before exporting source adjustments.');
+  return {value,source,lut,a};
+ }
+ async function inspectionStill(payload,signal){
+  const {value,source,lut,a}=exportContext(payload),exports=require('./look-export.cjs'),relative=`cache/${exports.key(value.sha256,lut?.sha256||'',source.profile,a)}-adjusted.png`;
+  if(!fs.existsSync(asset(relative))){await exports.render(asset(value.asset),lut?asset(lut.asset):undefined,source.profile,a,asset(relative),signal);}
+  signal?.throwIfAborted();const stream=JSON.parse((await media.run(media.ffprobe,['-v','error','-show_streams','-of','json',asset(relative)],signal)).output).streams[0];
+  return {url:`assets/${relative}`,width:stream.width,height:stream.height};
+ }
+ // Full-resolution inspection reads saved assets only. Serialize its workers,
+ // cancel stale requests, and let the existing library writer remain available.
+ let inspectionQueue=Promise.resolve();
+ function queuedInspection(payload,signal){signal=signal?AbortSignal.any([signal,previewLifetime.signal]):previewLifetime.signal;return cachedWork(()=>{
+  const task=inspectionQueue.then(()=>{signal?.throwIfAborted();return inspectionStill(payload,signal);});
+  inspectionQueue=task.catch(()=>{});return task;
+ });}
  const methods={
+  inspectStill:(payload,signal)=>queuedInspection(payload,signal),
+  exportLook:payload=>job(async signal=>{
+   const {value,source,lut,a}=exportContext(payload),id=randomUUID(),format=payload.format;if(!['png','cube'].includes(format))throw Error('Choose PNG or CUBE export.');
+   if(format==='cube'&&source.profile==='unknown')throw Error('Confirm the scene recording profile before exporting a portable look.');
+   const file=path.join(root,'staging',id+'.'+format),stem=(lut?.name||'Original')+'_Adjusted';
+   try{
+    if(format==='png'){progress='Exporting the original-resolution image…';const image=await queuedInspection(payload,signal);await fsp.copyFile(asset(image.url.slice(7)),file);}
+    else{progress='Baking an adjusted 33-point look…';atomicWrite(file,require('./look-export.cjs').bake(lut?fs.readFileSync(asset(lut.asset)):undefined,source.profile,a,stem,lut?.output||source.profile));}
+    signal.throwIfAborted();downloads.set(id,{file,name:stem,filename:(format==='png'?value.name+'_':'')+stem+'.'+format,at:Date.now()});return {url:'export/look/'+id,name:stem+'.'+format};
+   }catch(error){await fsp.unlink(file).catch(()=>{});throw error;}
+  }),
   linkClips:({projectId})=>job(async signal=>{
    store.one('SELECT * FROM projects WHERE id=?',[projectId]);progress='Choose original clips in the Mac file picker…';const files=await chooseClipFiles(signal),imported=[],errors=[];
    for(const chosen of files){signal.throwIfAborted();try{
@@ -160,7 +192,7 @@ async function startServer({root=process.env.LUT_EXPLORER_DATA||path.join(os.hom
    const suggestion=metadata.validateSuggestion(kind,await ai.suggest({provider:providerId,prompt,images,schema:metadata.schema(kind),signal}));signal.throwIfAborted();if(details.adaptation){suggestion.code=details.displayCode||details.code;suggestion.maker=details.maker||'';}
    return {kind,id,suggestion,baseRevision,source:{provider:providerId,at:new Date().toISOString()},images:images.length};
   },payload.requestId),
-  backup:()=>job(async signal=>{progress='Backing up library and saved frames…';const directory=path.join(root,'backups',`Library-${Date.now()}`);await fsp.mkdir(directory);atomicWrite(path.join(directory,'library.sqlite'),store.db.export());for(const sub of ['frames','luts','clips','gallery']){signal.throwIfAborted();await fsp.cp(path.join(root,sub),path.join(directory,sub),{recursive:true});}atomicWrite(path.join(directory,'RESTORE.txt'),Buffer.from('Stop LUT Buddy. Start it with LUT_EXPLORER_DATA pointing at this backup folder. Source clip locations inside the library are remapped automatically on startup. The original library remains separate.\n'));return directory;})
+  backup:()=>job(async signal=>{progress='Backing up library and saved frames…';const directory=path.join(root,'backups',`Library-${Date.now()}`);await fsp.mkdir(directory);atomicWrite(path.join(directory,'library.sqlite'),store.db.export());for(const sub of ['frames','luts','clips','gallery']){signal.throwIfAborted();await fsp.cp(path.join(root,sub),path.join(directory,sub),{recursive:true});}atomicWrite(path.join(directory,'RESTORE.txt'),Buffer.from('Stop LUT Pal. Start it with LUT_EXPLORER_DATA pointing at this backup folder. Source clip locations inside the library are remapped automatically on startup. The original library remains separate.\n'));return directory;})
  };
  // Copied source locations follow a project backup when it is opened elsewhere.
  for(const row of store.query('SELECT * FROM clips')){const metadata=JSON.parse(row.metadata);if(metadata.librarySource){const source=asset(metadata.librarySource);if(source!==row.source&&fs.existsSync(source)){metadata.fingerprint=media.fingerprint(source);store.change(()=>store.db.run('UPDATE clips SET source=?,metadata=? WHERE id=?',[source,JSON.stringify(metadata),row.id]));}}}
@@ -184,7 +216,7 @@ async function startServer({root=process.env.LUT_EXPLORER_DATA||path.join(os.hom
  const server=http.createServer(async(req,res)=>{
   try{const address=server.address(),origin=`http://127.0.0.1:${address.port}`;
    res.setHeader('Cross-Origin-Resource-Policy','same-origin');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Content-Security-Policy',"frame-ancestors 'none'");
-   if(req.headers.host!==`127.0.0.1:${address.port}`||req.headers['sec-fetch-site']==='cross-site'||(req.headers.origin&&req.headers.origin!==origin))return reply(res,403,{error:'Use the local LUT Buddy window.'});
+   if(req.headers.host!==`127.0.0.1:${address.port}`||req.headers['sec-fetch-site']==='cross-site'||(req.headers.origin&&req.headers.origin!==origin))return reply(res,403,{error:'Use the local LUT Pal window.'});
    const parsed=new URL(req.url,origin),route=decodeURIComponent(parsed.pathname),projectId=parsed.searchParams.get('project')||store.state().projects[0].id;
    if(route==='/api/health'&&req.method==='GET')return reply(res,200,{app:'lut-explorer',version:require('../package.json').version,buildId:runtimeId,libraryRoot:path.resolve(root)});
    if(route==='/'||route==='/index.html'){
@@ -193,7 +225,7 @@ async function startServer({root=process.env.LUT_EXPLORER_DATA||path.join(os.hom
     for(const [key,value]of Object.entries({MANIFEST:data.records,SCENES_MANIFEST:data.scenes,DESCRIPTIONS:data.descriptions,CAMERA_METADATA:data.camera,BOOT:{projectId,token,libraryRoot:root,canLinkOriginals:process.platform==='darwin',profiles:[{id:'unknown',label:'[Unverified] — confirm profile'},{id:'rec709',label:'Rec.709'},{id:'hlg-bt2020',label:'HDR HLG / BT.2020'},...methods.portProfiles()],picker:{collections:data.library.collections.filter(c=>c.project_id===projectId),memberships:data.library.memberships.filter(m=>sceneIds.has(m.scene_id)),sceneOrders:data.library.sceneOrders.filter(o=>o.project_id===projectId)},settings:{...settings(projectId).state,favourites:data.favouriteNames}}}))html=html.replace(`__${key}__`,()=>jsonText(value));
     res.setHeader('Set-Cookie',`lut_session=${token}; HttpOnly; SameSite=Strict; Path=/`);res.writeHead(200,{'Content-Type':'text/html','Cache-Control':'no-store'});return res.end(html);
    }
-   if(!(req.headers.cookie||'').split(';').map(v=>v.trim()).includes(`lut_session=${token}`))return reply(res,403,{error:'Open LUT Buddy first.'});
+   if(!(req.headers.cookie||'').split(';').map(v=>v.trim()).includes(`lut_session=${token}`))return reply(res,403,{error:'Open LUT Pal first.'});
    if(req.method==='POST'&&req.headers['x-lut-token']!==token)return reply(res,403,{error:'Invalid library request.'});
    if(route==='/api/settings'){
     if(req.method==='GET'){const result=settings(projectId),data=model(projectId);return reply(res,200,{...result,state:{...result.state,favourites:data.favouriteNames},initial_import:false});}
@@ -203,14 +235,14 @@ async function startServer({root=process.env.LUT_EXPLORER_DATA||path.join(os.hom
    }
    if(route==='/api/progress')return reply(res,200,{text:progress});
    if(route==='/api/state')return reply(res,200,snapshot(projectId));
-   if(route==='/api/call'&&req.method==='POST'){const {method,payload}=await readJSON(req);if(!Object.hasOwn(methods,method))throw new Error('Unknown library action.');if(operation&&!['state','progress','cancel','setClipProfile','reorderLuts','clip','framePreview'].includes(method))throw new Error('Finish or cancel the current operation first.');const labels={renameProject:'Rename project',reorderLuts:'Reorder LUTs',reorderScenes:'Reorder scenes',addToCollection:'Add to collection',collectionMembership:'Change collection membership',collection:'Create collection',renameCollection:'Rename collection',reorderCollections:'Reorder collections',deleteCollection:'Remove collection',setClipProfile:'Change recording profile',updateScene:'Edit scene details',remove:'Remove scene',removeScenes:'Remove scenes',updateLut:'Edit LUT details',updateBatch:'Edit reviewed details'};const work=labels[method]?store.record(labels[method],()=>methods[method]({projectId,...payload}),payload?.projectId||projectId):methods[method]({projectId,...payload}),controller=['aiSuggest','frameCandidates'].includes(method)?operation:undefined;const abort=()=>{if(!res.writableEnded)controller?.abort();};if(controller)res.once('close',abort);try{const result=await work;if(result?.luts&&result?.projects){const current=snapshot(payload?.projectId||projectId);result.luts=current.luts;result.history=current.history;}return reply(res,200,{ok:true,data:result});}finally{res.removeListener('close',abort);}}
+   if(route==='/api/call'&&req.method==='POST'){const {method,payload}=await readJSON(req);if(!Object.hasOwn(methods,method))throw new Error('Unknown library action.');if(operation&&!['state','progress','cancel','setClipProfile','reorderLuts','clip','framePreview','inspectStill'].includes(method))throw new Error('Finish or cancel the current operation first.');const labels={renameProject:'Rename project',reorderLuts:'Reorder LUTs',reorderScenes:'Reorder scenes',addToCollection:'Add to collection',collectionMembership:'Change collection membership',collection:'Create collection',renameCollection:'Rename collection',reorderCollections:'Reorder collections',deleteCollection:'Remove collection',setClipProfile:'Change recording profile',updateScene:'Edit scene details',remove:'Remove scene',removeScenes:'Remove scenes',updateLut:'Edit LUT details',updateBatch:'Edit reviewed details'};const readController=method==='inspectStill'?new AbortController():undefined;const work=labels[method]?store.record(labels[method],()=>methods[method]({projectId,...payload}),payload?.projectId||projectId):methods[method]({projectId,...payload},readController?.signal),controller=readController||(['aiSuggest','frameCandidates','exportLook'].includes(method)?operation:undefined);const abort=()=>{if(!res.writableEnded)controller?.abort();};if(controller)res.once('close',abort);try{const result=await work;if(result?.luts&&result?.projects){const current=snapshot(payload?.projectId||projectId);result.luts=current.luts;result.history=current.history;}return reply(res,200,{ok:true,data:result});}finally{res.removeListener('close',abort);}}
    if(route.startsWith('/api/upload/')&&req.method==='POST'){const type=route.split('/').at(-1);if(type==='project'){return reply(res,200,{ok:true,data:await job(async signal=>{const file=path.join(root,'staging',randomUUID()+'.lutproject');try{progress='Opening project file…';await pipeline(req,fs.createWriteStream(file,{flags:'wx',mode:0o600}),{signal});return await projectFiles.open(store,file,signal);}finally{await fsp.unlink(file).catch(()=>{});}})});}if(!['clip','lut'].includes(type))throw new Error('Invalid import.');return reply(res,200,{ok:true,data:await upload(req,res,type,parsed.searchParams)});}
-   if(route.startsWith('/export/project/')){const id=route.slice(16),download=downloads.get(id);if(!download||Date.now()-download.at>3600000)throw Error('Save this project again to download it.');res.setHeader('Content-Disposition',`attachment; filename*=UTF-8''${encodeURIComponent(download.name+'.lutproject')}`);try{return await sendFile(res,download.file);}finally{downloads.delete(id);await fsp.unlink(download.file).catch(()=>{});}}
+   if(route.startsWith('/export/project/')||route.startsWith('/export/look/')){const id=route.split('/').at(-1),download=downloads.get(id);if(!download||Date.now()-download.at>3600000)throw Error('Export again to download it.');downloads.delete(id);res.setHeader('Content-Disposition',`attachment; filename*=UTF-8''${encodeURIComponent(download.filename||download.name+'.lutproject')}`);try{return await sendFile(res,download.file);}finally{downloads.delete(id);await fsp.unlink(download.file).catch(()=>{});}}
    if(route.startsWith('/assets/'))return await sendFile(res,asset(route.slice(8)));
    if(route.startsWith('/previews/')){const parts=route.slice(10).split('/');if(!parts.every(idValid))throw new Error('Invalid preview.');return await sendFile(res,asset(await rendered(parts[0],parts[1]==='original'?'':parts[1])));}
    if(route.startsWith('/export/lut/')){const lut=store.one('SELECT * FROM luts WHERE id=?',[route.slice(12)]);res.setHeader('Content-Disposition',`attachment; filename*=UTF-8''${encodeURIComponent(lut.original_name)}`);return await sendFile(res,asset(lut.asset));}
    if(route.startsWith('/export/still/')){const parts=route.slice(14).split('/'),value=scene(parts[0]),lutId=parts[1]==='original'?'':parts[1];let file=value.asset;if(lutId){await rendered(value.id,lutId);const lut=store.one('SELECT * FROM luts WHERE id=?',[lutId]),destination=`cache/${value.sha256}-${lut.sha256}-export.png`;if(!fs.existsSync(asset(destination)))await cachedWork(()=>media.renderLut(asset(value.asset),asset(lut.asset),asset(destination),previewLifetime.signal));file=destination;}res.setHeader('Content-Disposition',`attachment; filename*=UTF-8''${encodeURIComponent(value.name+path.extname(file))}`);return await sendFile(res,asset(file));}
-   if(['/source-curves.js','/porting.js','/look-navigation.js','/viewer.css','/library.css','/preview-renderer.js','/levels-histogram.js','/explorer-overlay.js','/scene-picker.js','/library.js','/ai.js','/batch-review.js'].includes(route))return await sendFile(res,path.join(uiRoot,route.slice(1)));
+   if(['/favicon.png','/lut-pal-wordmark.png','/look-math.js','/scope-math.js','/scope-panel.js','/inspection.js','/inspection.css','/source-curves.js','/porting.js','/look-navigation.js','/viewer.css','/library.css','/preview-renderer.js','/levels-histogram.js','/explorer-overlay.js','/scene-picker.js','/library.js','/ai.js','/batch-review.js'].includes(route))return await sendFile(res,path.join(uiRoot,route.slice(1)));
    return reply(res,404,{error:'Not found.'});
   }catch(error){if(!res.headersSent&&!res.destroyed)reply(res,400,{ok:false,error:error.name==='AbortError'?'Operation cancelled.':error.code==='ENOSPC'?'The disk is full. Free some space and retry; completed imports stay saved.':error.message});else res.destroy();}
  });
@@ -218,5 +250,5 @@ async function startServer({root=process.env.LUT_EXPLORER_DATA||path.join(os.hom
  let closing;return {server,store,url:`http://127.0.0.1:${server.address().port}`,close:()=>closing??=(async()=>{operation?.abort();previewLifetime.abort();await Promise.allSettled([...previewBuilds.values(),...cacheTasks,renderQueue,...(operationDone?[operationDone]:[])]);await new Promise(resolve=>{server.close(resolve);server.closeAllConnections();});for(const d of downloads.values())await fsp.unlink(d.file).catch(()=>{});store.close();})()};
  }catch(error){store.close();throw error;}
 }
-if(require.main===module)startServer().then(result=>{console.log(`LUT Buddy is ready: ${result.url}\nLibrary: ${result.store.root}\nKeep this window open while using the viewer. Control+C stops it.`);for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>result.close().then(()=>process.exit(0)));}).catch(error=>{console.error(error.message);process.exitCode=1;});
+if(require.main===module)startServer().then(result=>{console.log(`LUT Pal is ready: ${result.url}\nLibrary: ${result.store.root}\nKeep this window open while using the viewer. Control+C stops it.`);for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>result.close().then(()=>process.exit(0)));}).catch(error=>{console.error(error.message);process.exitCode=1;});
 module.exports={startServer};

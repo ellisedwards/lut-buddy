@@ -1,5 +1,5 @@
 {
-  "name": "lut-buddy-alpha",
+  "name": "lut-pal-alpha",
   "version": "0.2.1",
   "description": "The existing LUT viewer with a local web project library",
   "private": true,

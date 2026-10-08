@@ -1,9 +1,24 @@
-# LUT Buddy developer handoff
+# LUT Pal developer handoff
 
 Updated 2026-10-07. This is a Mac-first, single-user local web project with an MIT
 licence. Keep the existing viewer as the base experience; do not redesign it.
 
 ## Current delivery
+
+The app is now **LUT Pal**, with the owner-supplied corner wordmark and favicon.
+The launcher is `Start LUT Pal.command`; the source ZIP uses `LUT-Pal`. Existing
+library paths, project identifiers and writer locks remain compatible.
+
+Optional [inspection tools](INSPECTION.md) add expandable RGB-aware histograms,
+clipping overlays, waveform, RGB parade, a Rec.709 vectorscope/skin hue guide,
+Wipe/Side by side comparison, original-resolution 100% zoom/pan, full-resolution
+adjusted 16-bit PNGs and a separate adjusted 33-point CUBE. The scopes measure
+preview signals; the CUBE is an approximation. Normal browsing does not invoke
+the new full-resolution worker. Preserve this boundary.
+
+Local synthetic/browser checks cover these tools, independent colour swatches,
+actual downloads, narrow-screen layout and cancellation during inspection.
+The automated suite has 93 tests. Recheck the exact runtime/commit before claims.
 
 The current source adds a subtle orange-black abbreviation band to converted
 LUT thumbnails and a **Converted from** source LUT/profile readout below the

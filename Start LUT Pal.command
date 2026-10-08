@@ -15,7 +15,7 @@ if ! [[ "$lut_port" =~ ^[0-9]+$ ]] || [ "$lut_port" -lt 1 ] || [ "$lut_port" -gt
 lut_url="http://127.0.0.1:$lut_port"
 lut_expected="${LUT_EXPLORER_DATA:-$HOME/Documents/LUT Explorer Library}"
 if node scripts/check-running.cjs "$lut_url" "$lut_expected"; then
-  echo "LUT Buddy is already running: $lut_url"
+  echo "LUT Pal is already running: $lut_url"
   if [ "${LUT_EXPLORER_NO_OPEN:-0}" != 1 ]; then open "$lut_url"; fi
   exit 0
 else

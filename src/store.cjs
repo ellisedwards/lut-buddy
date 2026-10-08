@@ -18,14 +18,14 @@ class Store {
     fs.mkdirSync(root, {recursive:true});
     const SQL = await initSQL({locateFile: name => require.resolve(`sql.js/dist/${name}`)});
     const lockPath=path.join(fs.realpathSync(root),'.lut-buddy.lock');let store;
-    let release;try{release=lockfile.lockSync(root,{lockfilePath:lockPath,stale:60000,update:10000,retries:0,onCompromised:error=>{if(store)store.lockError=error;}});}catch(error){if(error.code==='ELOCKED')throw new Error('This library is already open in LUT Buddy. Use the existing window, or stop its service first. After a forced quit, wait one minute and try again.');throw error;}
+    let release;try{release=lockfile.lockSync(root,{lockfilePath:lockPath,stale:60000,update:10000,retries:0,onCompromised:error=>{if(store)store.lockError=error;}});}catch(error){if(error.code==='ELOCKED')throw new Error('This library is already open in LUT Pal. Use the existing window, or stop its service first. After a forced quit, wait one minute and try again.');throw error;}
     try{
     const file = path.join(root,'library.sqlite');
     const db = fs.existsSync(file) ? new SQL.Database(fs.readFileSync(file)) : new SQL.Database();
     store = new Store(root,db,SQL);store.releaseLock=release;store.lockPath=lockPath;store.lockIdentity=fs.statSync(lockPath);
     db.run('PRAGMA foreign_keys=ON;');
     const version = db.exec('PRAGMA user_version')[0].values[0][0];
-    if (version > 7) throw new Error('This library needs a newer version of LUT Buddy.');
+    if (version > 7) throw new Error('This library needs a newer version of LUT Pal.');
     if(version>0&&version<7)store.backup();
     if (version === 0) store.change(() => {
       db.run(`CREATE TABLE projects(id TEXT PRIMARY KEY,name TEXT NOT NULL);
@@ -56,7 +56,7 @@ class Store {
   query(sql,args=[]) { const statement = this.db.prepare(sql); try { statement.bind(args); const rows=[]; while(statement.step()) rows.push(statement.getAsObject()); return rows; } finally { statement.free(); } }
   one(sql,args=[]) { const row=this.query(sql,args)[0]; if(!row) throw new Error('That library item is no longer available.'); return row; }
   record(label,work,projectId) { const previous=this.editLabel,previousProject=this.editProject;this.editLabel=label;this.editProject=projectId;try{return work();}finally{this.editLabel=previous;this.editProject=previousProject;} }
-  assertWritable(){if(this.closed)throw new Error('This library is closed. Reopen LUT Buddy.');let current;try{current=fs.statSync(this.lockPath);}catch{}if(this.lockError||!current||current.ino!==this.lockIdentity.ino||current.dev!==this.lockIdentity.dev||Date.now()-current.mtimeMs>60000)throw new Error('Library protection was interrupted. Stop and reopen LUT Buddy before saving.');}
+  assertWritable(){if(this.closed)throw new Error('This library is closed. Reopen LUT Pal.');let current;try{current=fs.statSync(this.lockPath);}catch{}if(this.lockError||!current||current.ino!==this.lockIdentity.ino||current.dev!==this.lockIdentity.dev||Date.now()-current.mtimeMs>60000)throw new Error('Library protection was interrupted. Stop and reopen LUT Pal before saving.');}
   close(){if(this.closed)return;this.closed=true;try{this.db.close();}finally{try{this.releaseLock?.();}catch(error){if(!this.lockError&&!['ERELEASED','ENOENT'].includes(error.code))throw error;}}}
   change(work) {
     this.assertWritable();

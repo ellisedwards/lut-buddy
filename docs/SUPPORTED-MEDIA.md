@@ -45,6 +45,15 @@ look comparisons, not a calibrated grading monitor. Cross-camera matching,
 including sensor/exposure/white-balance differences, remains `[Unverified]`
 until tested on paired footage.
 
+## Inspection and adjusted exports
+
+[Inspection tools](INSPECTION.md) measure encoded browser previews and sample the
+whole image. Vectorscope colour targets require confirmed Rec.709 output.
+Clipping warns about preview thresholds, not lost sensor detail. Full-resolution
+PNG export uses the saved source image, enabled adjustments and the source LUT,
+retaining 16-bit RGB. Portable adjusted CUBEs are separate 33-point approximations
+for unadjusted footage in the stated input profile. Existing originals stay intact.
+
 ## Proof boundaries
 
 Automated checks use independently decoded fractional/VFR frames, synthetic

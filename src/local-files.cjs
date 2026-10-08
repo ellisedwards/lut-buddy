@@ -3,7 +3,7 @@ const {spawn}=require('node:child_process');
 // The native chooser supplies paths; browser requests cannot supply them.
 const chooserScript=`function run(){
  var app=Application.currentApplication();app.includeStandardAdditions=true;
- try{var files=app.chooseFile({withPrompt:'Choose original clips to link to LUT Buddy',ofType:['mp4','mov','mxf','mkv','mts','m2ts','avi','webm'],multipleSelectionsAllowed:true});return JSON.stringify(files.map(function(file){return file.toString();}));}
+ try{var files=app.chooseFile({withPrompt:'Choose original clips to link to LUT Pal',ofType:['mp4','mov','mxf','mkv','mts','m2ts','avi','webm'],multipleSelectionsAllowed:true});return JSON.stringify(files.map(function(file){return file.toString();}));}
  catch(error){if(error.errorNumber===-128)return '[]';throw error;}
 }`;
 async function chooseClipFiles(signal){
