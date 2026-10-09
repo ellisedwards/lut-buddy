@@ -18,7 +18,7 @@ the new full-resolution worker. Preserve this boundary.
 
 Local synthetic/browser checks cover these tools, independent colour swatches,
 actual downloads, narrow-screen layout and cancellation during inspection.
-The automated suite has 93 tests. Recheck the exact runtime/commit before claims.
+The automated suite has 95 tests. Recheck the exact runtime/commit before claims.
 
 The current source adds a subtle orange-black abbreviation band to converted
 LUT thumbnails and a **Converted from** source LUT/profile readout below the
@@ -41,8 +41,11 @@ All scenes always keeps demos below footage, even if older saved orders mix them
 before background thumbnails. Demo flags also cover imported Apple Log sample
 clips. Existing thumbnails stay visible until the next row is ready, then swap
 together. Only empty tiles have initial placeholders; no progress counter
-is added beneath the rail. A delayed overlay appears only while entering a scene,
-never while switching looks within it. Saved previews bypass the background
+is added beneath the rail. A last-resort overlay appears only after a scene has remained unfinished for
+1.5 seconds, never while switching looks within it. Recently viewed main previews
+have a separate 64 MiB decoded-image budget so revisiting a scene does not depend
+on retaining its entire LUT row. Visible thumbnails start after the main preview
+(including adjustments) finishes; hidden non-favourites are loaded only when shown. Saved previews bypass the background
 generation queue, so a ready look cannot be held up by an uncached one.
 An open tab keeps its own scene/look during shared preference refreshes and
 save conflicts. Shared refreshes render without writing preferences back, so

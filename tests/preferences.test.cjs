@@ -68,8 +68,8 @@ test('Returning to the saved scene before the save delay replaces an older queue
 test('A delayed old preview cannot replace the current scene or clear its loading state',async()=>{
  const body=source.slice(source.indexOf('async function render('),source.indexOf('function select(')),first=deferred(),second=deferred(),elements=new Map(),timers=[];
  const element=id=>{if(!elements.has(id))elements.set(id,{hidden:true,textContent:'',classList:{toggle(){}},setAttribute(){},removeAttribute(){}});return elements.get(id);};
- const context=vm.createContext({scenes:[{id:'first'},{id:'second'}],state:{scene:'first',selected:'look',comparing:false},byScene:new Map([['first',{label:'First'}],['second',{label:'Second'}]]),byName:new Map([['look',{maker:'Fixture',code:'AAA'}]]),productBoot:{profiles:[]},$:element,preview:element('preview'),renderVersion:0,liveRenderer:null,thumbnailScene:'first',allTiles:[],loadedImages:new Set(),setTimeout:f=>timers.push(f),clearTimeout(){},invalidateLevels(){},updateControls(){},save(){},imagePath:(name,scene)=>scene,label:name=>name,loadImage:path=>path==='first'?first.promise:second.promise,refreshSceneAssets(){},renderAdjustments:async()=>false,updateDescription(){},updateLevels(){}});
- vm.runInContext(body,context);const old=vm.runInContext('render()',context);assert.equal(timers.length,0,'Switching looks in an established scene must not display a preparing overlay');context.state.scene='second';const current=vm.runInContext('render()',context);assert.equal(element('preview-loading').hidden,true);timers.forEach(f=>f());first.resolve();await old;assert.equal(element('preview-loading').hidden,false);assert.equal(element('preview').src,undefined);second.resolve();await current;assert.equal(element('preview').src,'second');assert.equal(element('preview').alt,'Second · look');assert.equal(element('preview-loading').hidden,true);
+ const context=vm.createContext({scenes:[{id:'first'},{id:'second'}],state:{scene:'first',selected:'look',comparing:false},byScene:new Map([['first',{label:'First'}],['second',{label:'Second'}]]),byName:new Map([['look',{maker:'Fixture',code:'AAA'}]]),productBoot:{profiles:[]},$:element,preview:element('preview'),renderVersion:0,liveRenderer:null,thumbnailScene:'first',allTiles:[],loadedImages:new Set(),recentPreviews:new Map(),setTimeout:(f,delay)=>timers.push({f,delay}),clearTimeout(){},invalidateLevels(){},updateControls(){},save(){},imagePath:(name,scene)=>scene,label:name=>name,loadImage:path=>path==='first'?first.promise:second.promise,refreshSceneAssets(){},renderAdjustments:async()=>false,updateDescription(){},updateLevels(){}});
+ vm.runInContext(body,context);const old=vm.runInContext('render()',context);assert.equal(timers.length,0,'Switching looks in an established scene must not display a preparing overlay');context.state.scene='second';const current=vm.runInContext('render()',context);assert.equal(element('preview-loading').hidden,true);assert.equal(timers[0].delay,1500,'Loading feedback is reserved for a sustained wait');timers.forEach(t=>t.f());first.resolve();await old;assert.equal(element('preview-loading').hidden,false);assert.equal(element('preview').src,undefined);second.resolve();await current;assert.equal(element('preview').src,'second');assert.equal(element('preview').alt,'Second · look');assert.equal(element('preview-loading').hidden,true);
 });
 
 test('The first delayed shared read preserves the scene already shown from page boot',async()=>{
@@ -88,4 +88,24 @@ test('Scene thumbnails stay visible and swap together, with late old scenes igno
  loads.get('first/one').resolve();await new Promise(r=>setImmediate(r));assert.deepEqual(tiles.map(t=>t.img.src),['previous/one','previous/two'],'One finished tile must not produce a partial row');
  context.state.scene='second';vm.runInContext('refreshSceneAssets()',context);loads.get('second/two').resolve();loads.get('second/one').resolve();await new Promise(r=>setImmediate(r));
  assert.deepEqual(tiles.map(t=>t.img.src),['second/one','second/two']);loads.get('first/two').resolve();await new Promise(r=>setImmediate(r));assert.deepEqual(tiles.map(t=>t.img.src),['second/one','second/two'],'Late completion from a previous scene must not flash the row back');
+});
+
+test('Recent main previews survive thumbnail eviction, within a decoded-memory budget',async()=>{
+ const body=source.slice(source.indexOf('const cache=new Map()'),source.indexOf('let renderVersion=0;')),requests=[];
+ class Image{naturalWidth=1920;naturalHeight=1080;set src(value){this.path=value;requests.push(value);queueMicrotask(()=>this.onload());}decode(){return Promise.resolve();}}
+ const context=vm.createContext({Image,byScene:new Map([['next',{}]]),visibleNames:()=>[],Promise,Map,Set});vm.runInContext(body,context);
+ const main=await vm.runInContext("loadImage('previews/old/look',{primary:true})",context);
+ vm.runInContext("warmScene('next')",context);assert.equal(vm.runInContext("cache.has('previews/old/look')",context),false);
+ assert.equal(await vm.runInContext("loadImage('previews/old/look',{primary:true})",context),main);assert.equal(requests.length,1,'Revisiting a viewed scene must reuse its decoded preview');
+ for(let n=0;n<12;n++)await vm.runInContext(`loadImage('previews/${n}/look',{primary:true})`,context);
+ assert.ok(vm.runInContext('recentPreviewBytes<=64*1024*1024',context));assert.equal(vm.runInContext("recentPreviews.has('previews/old/look')",context),false,'Old main previews are evicted when the budget is full');
+ const recent=await vm.runInContext("loadImage('previews/11/look',{primary:true})",context);assert.equal(recent.path,'previews/11/look');assert.equal(requests.length,13);
+});
+
+test('Hidden LUTs do not delay the visible thumbnail row; revealing them loads them on demand',async()=>{
+ const body=source.slice(source.indexOf('function refreshSceneAssets(){'),source.indexOf('async function loadProjectSettings(){')),loads=[];
+ const tiles=['visible','hidden'].map((name,i)=>{const img={src:'old/'+name,getAttribute(){return this.src;},removeAttribute(){this.src='';}};return {hidden:!!i,dataset:{name},querySelector:()=>img,classList:{toggle(){},remove(){}}};});
+ const context=vm.createContext({state:{scene:'new'},thumbnailVersion:0,thumbnailScene:null,allTiles:tiles,canUseLut:()=>true,imagePath:(name,scene)=>scene+'/'+name,warmScene(){},loadImage:path=>{loads.push(path);return Promise.resolve();}});vm.runInContext(body,context);
+ vm.runInContext('refreshSceneAssets()',context);await new Promise(r=>setImmediate(r));assert.deepEqual(loads,['new/visible']);assert.equal(tiles[0].querySelector().src,'new/visible');assert.equal(tiles[1].querySelector().src,'old/hidden');
+ tiles[1].hidden=false;vm.runInContext('refreshSceneAssets()',context);await new Promise(r=>setImmediate(r));assert.equal(tiles[1].querySelector().src,'new/hidden');
 });

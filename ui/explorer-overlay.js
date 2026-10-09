@@ -130,14 +130,25 @@ for (const r of records) {
 }
 $('reference').value=state.reference;
 const allTiles=[...rail.querySelectorAll('.tile')];
-const cache=new Map(),loadedImages=new Set();
-function loadImage(path) {
+const cache=new Map(),loadedImages=new Set(),recentPreviews=new Map();
+let recentPreviewBytes=0;
+function keepPreview(path,image) {
+ const previous=recentPreviews.get(path);if(previous)recentPreviewBytes-=previous.bytes;
+ recentPreviews.delete(path);
+ const bytes=image.naturalWidth*image.naturalHeight*4;
+ recentPreviews.set(path,{image,bytes});recentPreviewBytes+=bytes;
+ // Retain recently viewed images separately from the much larger LUT rows.
+ while(recentPreviewBytes>64*1024*1024&&recentPreviews.size>1){const oldest=recentPreviews.keys().next().value;recentPreviewBytes-=recentPreviews.get(oldest).bytes;recentPreviews.delete(oldest);}
+}
+function loadImage(path,{primary=false}={}) {
+ if(recentPreviews.has(path)){const {image}=recentPreviews.get(path);if(primary)keepPreview(path,image);return Promise.resolve(image);}
  if (!cache.has(path)) {
   const img=new Image();
   const promise=new Promise((resolve,reject)=>{img.onload=()=>img.decode().then(()=>{if(cache.get(path)===promise)loadedImages.add(path);resolve(img);},reject);img.onerror=()=>reject(new Error(`Could not load ${path}`));});
   img.src=path;cache.set(path,promise);promise.catch(()=>{if(cache.get(path)===promise){cache.delete(path);loadedImages.delete(path);}});
  }
- return cache.get(path);
+ const pending=cache.get(path);
+ return primary?pending.then(image=>{keepPreview(path,image);return image;}):pending;
 }
 const warmedScenes=[];
 function warmScene(scene) {
@@ -150,8 +161,8 @@ function warmScene(scene) {
  for(const path of cache.keys()) {
   if(!warmedScenes.some(id=>path.startsWith('previews/'+id+'/'))){cache.delete(path);loadedImages.delete(path);}
  }
- // Preloading makes the click-and-drag sweep instantaneous once images arrive.
- for (const name of [state.comparing?state.reference:state.selected,'',...byName.keys()])if(canUseLut(name,scene))loadImage(imagePath(name,scene)).catch(()=>{});
+ // Warm only the row the user is browsing, not every hidden non-favourite LUT.
+ for (const name of visibleNames())loadImage(imagePath(name,scene)).catch(()=>{});
 }
 let renderVersion=0;
 function visibleNames() { return ['',...records.filter(r=>canUseLut(r.name)&&(!state.favouritesOnly || state.favourites.includes(r.name))).map(r=>r.name)]; }
@@ -216,10 +227,10 @@ async function render({persist=true}={}) {
  const path=imagePath(name,scene);
  $('preview-loading').hidden=true;
  $('preview-loading').textContent=`Preparing ${byScene.get(scene)?.label||'scene'} · ${byName.get(name)?.stem||'original'}…`;$('stage').setAttribute('aria-busy','true');
- // Cached previews finish before this delay: avoid flashing a loader while sweeping looks.
- const loadingTimer=thumbnailScene===scene||loadedImages.has(path)?undefined:setTimeout(()=>{if(version===renderVersion)$('preview-loading').hidden=false;},180);
+ // This is a last resort for a genuinely slow scene, never a quick switch.
+ const loadingTimer=thumbnailScene===scene||loadedImages.has(path)||recentPreviews.has(path)?undefined:setTimeout(()=>{if(version===renderVersion)$('preview-loading').hidden=false;},1500);
  try {
-  const image=loadImage(path);if(thumbnailScene!==scene||allTiles.some(tile=>tile.classList.contains('preview-failed')))refreshSceneAssets();
+  const image=loadImage(path,{primary:true});
   await image;
   if (version!==renderVersion) return;
   $('filename').textContent=label(name);updateDescription(name);
@@ -237,6 +248,9 @@ async function render({persist=true}={}) {
   preview.src=path;preview.alt=`${byScene.get(scene).label} · ${label(name)}`;
   $('live-preview').hidden=!adjusted;preview.hidden=adjusted;
   displayedLevelsVersion=version;updateLevels();globalThis.LUTInspection?.update(globalThis.LUTProduct.getView());
+  // Finish the selected preview (including saved adjustments) before starting
+  // background image requests, so they cannot delay its raw-frame download.
+  if(thumbnailScene!==scene||allTiles.some(tile=>!tile.hidden&&(tile.classList.contains('preview-failed')||tile.querySelector('img').getAttribute('src')!==imagePath(tile.dataset.name,scene))))refreshSceneAssets();
  } catch (error) {
   if(version===renderVersion) { $('filename').textContent='Preview could not load';$('look-detail').textContent=error.message; }
  } finally {clearTimeout(loadingTimer);if(version===renderVersion){$('preview-loading').hidden=true;$('stage').setAttribute('aria-busy','false');}}
@@ -501,7 +515,7 @@ async function persistProject(){
 let thumbnailScene=null,thumbnailVersion=0;
 function refreshSceneAssets(){
  const scene=state.scene,version=++thumbnailVersion;thumbnailScene=scene;
- const active=allTiles.filter(tile=>!tile.dataset.name||canUseLut(tile.dataset.name,scene));
+ const active=allTiles.filter(tile=>!tile.hidden&&(!tile.dataset.name||canUseLut(tile.dataset.name,scene)));
  // Keep the current row visible until the new scene's row is ready, then swap
  // together. Only a tile with no image yet needs an initial placeholder.
  const pending=active.map(tile=>{
