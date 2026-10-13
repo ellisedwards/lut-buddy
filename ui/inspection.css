@@ -14,3 +14,6 @@
 
 /* The same translucent surface and scope switcher are used at both sizes. */
 .scope-switcher{display:flex;align-items:center;gap:2px;min-width:0;flex:1;color:inherit}.scope-switcher #scope-title{flex:1;text-align:center;white-space:nowrap}.levels-heading .scope-step{display:grid;place-items:center;width:22px;height:22px;padding:3px;border:0;background:transparent;color:inherit;flex:none}.scope-step svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}.levels-heading .scope-step:hover{color:var(--accent)}.scope-controls:has([hidden]){display:none}
+
+/* Reserve the axis and legend height so changing scope types never resizes the panel. */
+.scope-legend{min-height:16px}.scope-legend #scope-skin-label{margin-left:auto;white-space:nowrap;font-size:10px}.scope-legend #scope-skin{margin:0 3px 0 0;vertical-align:middle;accent-color:var(--accent)}.levels:not(.scope-expanded) #scope-skin-label{display:none}.scope-expanded .scope-legend{min-height:18px}
