@@ -24,7 +24,9 @@ missing. Existing video copies, backups and older project archives are preserved
 this change does not delete or migrate them. Library labels these as stored copies.
 
 The app is now **LUT Library**, with the owner-supplied colour icon beside the
-name and the same favicon. Light mode uses a white outer background.
+name and the same favicon. Light mode uses a white outer background and a
+72% white glass layer for floating panels and viewer buttons. Theme changes
+redraw the cached scope with the matching line colours, without reloading media.
 The launcher is `Start LUT Library.command`; the source ZIP uses `LUT-Library`. Existing
 library paths, project identifiers and writer locks remain compatible.
 
