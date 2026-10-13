@@ -1,9 +1,16 @@
 # LUT Pal developer handoff
 
-Updated 2026-10-07. This is a Mac-first, single-user local web project with an MIT
+Updated 2026-10-13. This is a Mac-first, single-user local web project with an MIT
 licence. Keep the existing viewer as the base experience; do not redesign it.
 
 ## Current delivery
+
+New footage intake is **link-only** through the Mac native picker. The copying
+clip/folder buttons and browser video inputs are removed, and the old video-upload
+endpoint refuses requests before writing files. LUT uploads remain available.
+Saved scene previews and full-resolution exports work after a linked source goes
+missing. Existing video copies, backups and older project archives are preserved;
+this change does not delete or migrate them. Library labels these as stored copies.
 
 The app is now **LUT Pal**, with the owner-supplied corner wordmark and favicon.
 The launcher is `Start LUT Pal.command`; the source ZIP uses `LUT-Pal`. Existing
@@ -18,7 +25,7 @@ the new full-resolution worker. Preserve this boundary.
 
 Local synthetic/browser checks cover these tools, independent colour swatches,
 actual downloads, narrow-screen layout and cancellation during inspection.
-The automated suite has 95 tests. Recheck the exact runtime/commit before claims.
+The automated suite has 96 tests. Recheck the exact runtime/commit before claims.
 
 The current source adds a subtle orange-black abbreviation band to converted
 LUT thumbnails and a **Converted from** source LUT/profile readout below the

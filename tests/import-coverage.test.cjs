@@ -52,7 +52,12 @@ test('A >2GB linked original streams without copying, offers six frames, exports
   await call('capture',{clipId:id,indices:[candidates[3].index],names:['Large-file scene']});await call('setClipProfile',{id,value:'apple-log2'});await call('refreshClipMetadata',{id}).then(()=>assert.fail('manual conflicting profile must be protected'),e=>assert.match(e.message,/conflicts/));await call('setClipProfile',{id,value:'rec709'});await call('refreshClipMetadata',{id});assert.equal(JSON.parse(app.store.one('SELECT metadata FROM clips WHERE id=?',[id]).metadata).linked,true);
   const destination=path.join(root,'saved.lutproject'),data=await projects.save(app.store,boot.projectId,destination);assert.equal(data.clips[0].source,'');assert.equal(JSON.parse(data.clips[0].metadata).format.filename,undefined);assert.ok(data.files.every(f=>!f.name.startsWith('clips/')));assert.ok(fs.statSync(destination).size<1024*1024);
   const imported=await projects.open(app.store,destination),saved=app.store.state().scenes.find(s=>s.project_id===imported.projectId),newClip=app.store.one('SELECT * FROM clips WHERE project_id=?',[imported.projectId]);assert.ok(fs.existsSync(path.join(library,saved.asset)));assert.throws(()=>media.unchanged(newClip),/Linked clip is missing/);
-  fs.renameSync(source,source+'.moved.mp4');chosen=[source+'.moved.mp4'];const again=await call('linkClips',{projectId:imported.projectId});assert.equal(again.imported[0].id,newClip.id);assert.equal(again.imported[0].duplicate,true);assert.equal(app.store.state().clips.filter(c=>c.project_id===imported.projectId).length,1);const relinked=app.store.one('SELECT * FROM clips WHERE id=?',[newClip.id]);assert.equal(media.unchanged(relinked).sha256,metadata.sha256);assert.equal(relinked.profile,'rec709');assert.equal(JSON.parse(relinked.metadata).profileSelectedByUser,true);
+  fs.renameSync(source,source+'.moved.mp4');
+  const savedPreview=await fetch(app.url+'/previews/'+saved.id+'/original',{headers});assert.equal(savedPreview.status,200);assert.ok((await savedPreview.arrayBuffer()).byteLength>0);
+  const inspect=await call('inspectStill',{projectId:imported.projectId,sceneId:saved.id,adjustments:{}});assert.equal(inspect.width,96);assert.equal(inspect.height,64);assert.ok(fs.existsSync(path.join(library,inspect.url.slice(7))));
+  const png=await call('exportLook',{projectId:imported.projectId,sceneId:saved.id,format:'png',adjustments:{}});const download=await fetch(app.url+'/'+png.url,{headers});assert.equal(download.status,200);assert.ok((await download.arrayBuffer()).byteLength>0);
+  assert.deepEqual(fs.readdirSync(path.join(library,'clips')),[],'Saved scene previews and full-resolution exports do not need a video copy');
+  chosen=[source+'.moved.mp4'];const again=await call('linkClips',{projectId:imported.projectId});assert.equal(again.imported[0].id,newClip.id);assert.equal(again.imported[0].duplicate,true);assert.equal(app.store.state().clips.filter(c=>c.project_id===imported.projectId).length,1);const relinked=app.store.one('SELECT * FROM clips WHERE id=?',[newClip.id]);assert.equal(media.unchanged(relinked).sha256,metadata.sha256);assert.equal(relinked.profile,'rec709');assert.equal(JSON.parse(relinked.metadata).profileSelectedByUser,true);
   chosen=[];assert.deepEqual((await call('linkClips')).imported,[]);chosen=[path.join(root,'bad.mp4')];fs.writeFileSync(chosen[0],'broken');assert.equal((await call('linkClips')).errors.length,1);assert.equal(app.store.state().clips.length,2);assert.equal(fs.statSync(source+'.moved.mp4').size,metadata.fingerprint.size);
  }finally{await app?.close();fs.rmSync(root,{recursive:true,force:true});}
 });
@@ -68,4 +73,17 @@ test('Closing frame choices cancels only its own decoder and leaves saved work i
    const before=app.store.state(),controller=new AbortController(),work=call('frameCandidates',{clipId:'clip',requestId:'choices'},controller.signal).catch(e=>e);await entered;await call('cancel',{requestId:'another-window'});controller.abort();await work;await Promise.race([cancelled,new Promise((_,reject)=>{const t=setTimeout(()=>reject(Error('Decoder was not cancelled')),2000);t.unref();})]);assert.deepEqual(app.store.state(),before);
   }finally{media.unchanged=originalUnchanged;}
  }finally{media.previewFrame=original;await app?.close();fs.rmSync(root,{recursive:true,force:true});}
+});
+
+test('Link-only clip intake rejects old video uploads without writing files, while CUBE imports still work',async()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'lut-link-only-')),app=await startServer({root,port:0});
+ try{
+  const page=await fetch(app.url),html=await page.text(),boot=JSON.parse(html.match(/id="product-boot"[^>]*>([\s\S]*?)<\/script>/)[1]),headers={Cookie:page.headers.get('set-cookie').split(';')[0],'X-LUT-Token':boot.token};
+  assert.ok(html.includes('Link original clips…'));assert.ok(!html.includes('id="library-import-clips"'));assert.ok(!html.includes('id="library-camera-folder"'));
+  const before=fs.readFileSync(app.store.file),rejected=await fetch(app.url+`/api/upload/clip?project=${boot.projectId}&name=original.mov`,{method:'POST',headers,body:'never store this video'});
+  assert.equal(rejected.status,400);assert.match((await rejected.json()).error,/Videos are linked, not copied/);assert.deepEqual(fs.readFileSync(app.store.file),before);assert.deepEqual(fs.readdirSync(path.join(root,'clips')),[]);assert.deepEqual(fs.readdirSync(path.join(root,'staging')),[]);
+  const cube='LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n';
+  const upload=()=>fetch(app.url+`/api/upload/lut?project=${boot.projectId}&name=identity.cube`,{method:'POST',headers,body:cube});
+  const first=await upload();assert.equal(first.status,200);const id=(await first.json()).data.id;const duplicate=await(await upload()).json();assert.equal(duplicate.data.id,id);assert.equal(duplicate.data.duplicate,true);assert.equal(app.store.state().luts.length,1);assert.deepEqual(fs.readdirSync(path.join(root,'clips')),[]);assert.deepEqual(fs.readdirSync(path.join(root,'staging')),[]);
+ }finally{await app.close();fs.rmSync(root,{recursive:true,force:true});}
 });

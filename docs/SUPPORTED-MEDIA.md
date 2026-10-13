@@ -6,6 +6,10 @@ Another-computer testing is deferred; local verification is recorded below.
 
 ## Import and metadata
 
+New footage is linked through the Mac native file picker; whole-video browser
+uploads are rejected. Saved scene images remain independent of the linked video.
+Existing stored copies and older project archives remain readable.
+
 Video containers accepted: MP4, MOV, MXF, MKV, MTS/M2TS, AVI and WebM. Acceptance
 of a container is not proof every codec inside it is supported. Unsupported or
 damaged footage must fail without publishing partial library records.
