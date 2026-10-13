@@ -94,7 +94,12 @@
  el('edit-lut-port').addEventListener('click',()=>{el('lut-dialog').close();window.LUTPorting.open({ids:[editingLut.id]});});
  el('library-link-clips').disabled=boot.canLinkOriginals===false;
  el('library-link-clips').title=boot.canLinkOriginals===false?'Linking originals requires the Mac file picker.':'Choose original videos; no whole-video copies are stored.';
- el('library-link-clips').addEventListener('click',()=>safe(async()=>{const result=await call('linkClips');await refresh();message(result.errors.length?result.errors.join('\n'):result.imported.length?'Originals linked. Saved scenes will stay in the library.':'Selection cancelled.');if(result.imported.length)await openClip(result.imported[0].id);}));
+ async function linkClips({collectionId='',onLinked}={}){
+  const result=await call('linkClips');await refresh();message(result.errors.length?result.errors.join('\n'):result.imported.length?'Originals linked. Saved scenes will stay in the library.':'Selection cancelled.');
+  if(result.imported.length){onLinked?.();await openClip(result.imported[0].id);el('import-collection').value=collectionId;if(result.errors.length)el('import-status').textContent=result.errors.join('\n');}
+  return result;
+ }
+ el('library-link-clips').addEventListener('click',()=>safe(()=>linkClips()));
  el('import-suggest-frames').addEventListener('click',()=>safe(async()=>{const id=clip.id,session=frameSession;el('import-suggest-frames').disabled=true;candidateRequest=new AbortController();try{const frames=await call('frameCandidates',{clipId:id,requestId:crypto.randomUUID()},candidateRequest.signal);if(session!==frameSession||!el('clip-dialog').open)return;el('import-candidates').replaceChildren(...frames.map(frame=>{const button=node('button'),img=node('img');img.src=frame.preview;img.alt='Frame at '+time(frame.pts,frame.timeBase);button.append(img,node('small',time(frame.pts,frame.timeBase)));button.addEventListener('click',()=>requestFrame(frame.index));return button;}));el('import-candidates').hidden=false;el('import-status').textContent='Evenly spaced frames. Pick one, then mark it or refine with the scrubber.';}catch(e){if(session===frameSession&&e.name!=='AbortError')throw e;}finally{if(session===frameSession){candidateRequest=undefined;el('import-suggest-frames').disabled=false;}}}));
  el('library-import-luts').addEventListener('click',()=>el('library-lut-files').click());
  el('library-lut-files').addEventListener('change',event=>safe(async()=>{const files=[...event.target.files];event.target.value='';await uploadLuts(files);}));
@@ -108,7 +113,7 @@
  async function undoRedo(action){await window.LUTProduct.flush?.();const result=await call(action);library=result;message(action==='undo'?'Edit undone.':'Edit restored.');await reload(false);}
  document.addEventListener('keydown',event=>{if(!(event.metaKey||event.ctrlKey)||event.altKey||event.defaultPrevented||document.querySelector('dialog[open]')||event.target.closest('input,textarea,select,[contenteditable=true]'))return;const key=event.key.toLowerCase(),action=key==='z'?(event.shiftKey?'redo':'undo'):key==='y'&&!event.metaKey?'redo':null;if(action){event.preventDefault();safe(()=>undoRedo(action));}});
  el('edit-lut-save').addEventListener('click',()=>safe(async()=>{await call('updateLut',{id:editingLut.id,name:el('edit-lut-name').value,input:el('edit-lut-input').value,output:el('edit-lut-output').value,favourite:el('edit-lut-favourite').checked,code:el('edit-lut-code').value,maker:el('edit-lut-maker').value,description:el('edit-lut-description').value,tags:el('edit-lut-tags').value,expectedRevision:editingLut.aiRevision,aiSource:editingLut.aiSource});message('LUT details saved. Original contents unchanged.');await reload();}));
- window.LUTLibrary={call,reload,refresh,profiles,getState:()=>library,acceptSnapshot:value=>{library=value;draw();}};
+ window.LUTLibrary={call,reload,refresh,linkClips,profiles,getState:()=>library,acceptSnapshot:value=>{library=value;draw();}};
  for(const kind of ['scene','lut'])el(`edit-${kind}-ai`).addEventListener('click',()=>window.LUTAI.open({kind,item:kind==='scene'?editingScene:editingLut,sceneId:window.LUTProduct.getSelection().scene}));
  el('library-ai').addEventListener('click',()=>window.LUTAI.settings());
  const size=bytes=>{if(bytes<1024)return bytes+' B';const units=['KB','MB','GB','TB'];let n=bytes/1024,i=0;while(n>=1024&&i<units.length-1){n/=1024;i++;}return n.toFixed(n<10?1:0)+' '+units[i];};

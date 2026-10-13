@@ -2,16 +2,17 @@
 (()=>{
  const $=id=>document.getElementById(id),panel=$('levels'),plot=$('levels-plot'),ctx=plot.getContext('2d'),sample=document.createElement('canvas'),sampleCtx=sample.getContext('2d',{willReadFrequently:true});
  let current,original,version=0,timer,expanded=false,lastPixels;const originalCache=new Map();
+ const scopeMode=()=>expanded?$('scope-mode').value:'histogram';
  const colours=['#ff7979','#70db9d','#87b4ff'];
  function scopeView(){const v=window.LUTProduct.getView(),surface=window.LUTInspection?.getScopeSurface();return v&&surface?{...v,surface}:v;}
  function grid(w,h){ctx.strokeStyle='#ffffff28';ctx.lineWidth=1;ctx.font='11px -apple-system, sans-serif';ctx.fillStyle='#bec4cc';for(const f of [0,.25,.5,.75,1]){const y=12+(1-f)*(h-24);ctx.beginPath();ctx.moveTo(28,y);ctx.lineTo(w-8,y);ctx.stroke();ctx.fillText(String(Math.round(f*100)),1,y+4);}}
  function trace(counts,colour,w,h,left=3,right=w-3,peak=Math.max(1,...counts)){ctx.beginPath();counts.forEach((n,i)=>{const x=left+i/(counts.length-1)*(right-left),y=h-4-Math.sqrt(n/peak)*(h-8);if(i)ctx.lineTo(x,y);else ctx.moveTo(x,y);});ctx.strokeStyle=colour;ctx.lineWidth=1.7;ctx.stroke();}
  function density(counts,cols,rows,x,y,w,h,colour){let peak=1;for(const n of counts)peak=Math.max(peak,n);const layer=document.createElement('canvas');layer.width=cols;layer.height=rows;const c=layer.getContext('2d'),image=c.createImageData(cols,rows),rgb=colour.match(/[a-f\d]{2}/gi).map(v=>parseInt(v,16));for(let i=0;i<counts.length;i++)if(counts[i]){const k=i*4;image.data[k]=rgb[0];image.data[k+1]=rgb[1];image.data[k+2]=rgb[2];image.data[k+3]=Math.round(255*(.3+.7*Math.sqrt(counts[i]/peak)));}c.putImageData(image,0,0);ctx.drawImage(layer,x,y,w,h);}
  function draw(){
-  if(!lastPixels)return;const mode=$('scope-mode').value,w=plot.width,h=plot.height;ctx.clearRect(0,0,w,h);ctx.fillStyle='#121519';ctx.fillRect(0,0,w,h);
+  if(!lastPixels)return;const mode=scopeMode(),w=plot.width,h=plot.height;ctx.clearRect(0,0,w,h);ctx.fillStyle='#121519';ctx.fillRect(0,0,w,h);
   const output=window.LUTScopes.histogram(lastPixels.data),rec709=current.record?current.record.output==='rec709':current.scene.profile==='rec709';
-  $('scope-source').textContent=current.comparing?'Reference preview':'Displayed preview';$('levels-output-label').textContent=current.comparing?'Reference':'Output';$('levels-axis').hidden=!['histogram','rgb'].includes(mode);panel.querySelector('.log-key').hidden=mode!=='histogram';
-  if(mode==='histogram'){const originalBins=original?.combined||output.combined,ratio=output.combined.reduce((a,b)=>a+b,0)/Math.max(1,originalBins.reduce((a,b)=>a+b,0));window.LUTLevels.draw(plot,Float64Array.from(originalBins,n=>n*ratio),output.combined,false);}
+  $('scope-source').textContent=current.comparing?'Reference preview':'Displayed preview';$('levels-output-label').textContent=current.comparing?'Reference':'Output';$('levels-axis').hidden=!['histogram','rgb'].includes(mode);panel.querySelector('.log-key').hidden=mode!=='histogram';panel.querySelector('.log-key').classList.toggle('scope-unavailable',mode==='histogram'&&!original);panel.querySelector('.log-key').title=original?'Original scene signal':'Original signal unavailable; only Output is plotted.';
+  if(mode==='histogram'){const originalBins=original?.combined,ratio=originalBins?output.combined.reduce((a,b)=>a+b,0)/Math.max(1,originalBins.reduce((a,b)=>a+b,0)):1;window.LUTLevels.draw(plot,originalBins?Float64Array.from(originalBins,n=>n*ratio):null,output.combined,!expanded&&document.documentElement.dataset.theme==='light');}
   else if(mode==='rgb'){const peak=Math.max(1,...output.rgb.flatMap(bins=>Array.from(bins)));output.rgb.forEach((bins,i)=>trace(bins,colours[i],w,h,3,w-3,peak));}
   else if(mode==='waveform'||mode==='parade'){
    grid(w,h);const {planes,columns,rows}=window.LUTScopes.waveform(lastPixels.data,lastPixels.width,lastPixels.height,{parade:mode==='parade'}),area=(w-38)/planes.length;
@@ -28,6 +29,9 @@
   const stats=window.LUTScopes.clipping(lastPixels.data,{low:Number($('clip-low').value)*2.55,high:Number($('clip-high').value)*2.55});
   const pct=n=>(n/Math.max(1,stats.pixels)*100).toFixed(1)+'%';$('scope-clipping').textContent=`Near black ${pct(stats.shadowPixels)} · near white ${pct(stats.highlightPixels)}`; $('scope-clipping').title='Near black: all channels at/below threshold. Near white: any channel at/above threshold. Measured from sampled preview pixels.';
   $('scope-channel-clipping').textContent=['R','G','B'].map((c,i)=>`${c}: ${pct(stats.black[i])} black / ${pct(stats.white[i])} white`).join(' · ');
+  plot.title=[$('scope-note').textContent,$('scope-clipping').textContent,$('scope-channel-clipping').textContent].join('\n');
+  $('clip-shadows').parentElement.title='Shadows: '+pct(stats.shadowPixels)+' · all channels at or below the black threshold.';
+  $('clip-highlights').parentElement.title='Highlights: '+pct(stats.highlightPixels)+' · any channel at or above the white threshold.';
   updateMask();
  }
  function updateMask(){
@@ -38,15 +42,17 @@
  async function update(view){
   current=view;clearTimeout(timer);const job=++version;if(!view?.scene)return;
   if(!panel.hidden||$('clip-shadows').checked||$('clip-highlights').checked)timer=setTimeout(async()=>{
+   let pixels;
    try{
-    sample.width=384;sample.height=Math.max(1,Math.round((view.surface.naturalHeight||view.surface.height)*384/(view.surface.naturalWidth||view.surface.width)));sampleCtx.drawImage(view.surface,0,0,sample.width,sample.height);const pixels=sampleCtx.getImageData(0,0,sample.width,sample.height);
+    if(view.surface.decode)await view.surface.decode();if(job!==version)return;
+    sample.width=384;sample.height=Math.max(1,Math.round((view.surface.naturalHeight||view.surface.height)*384/(view.surface.naturalWidth||view.surface.width)));sampleCtx.drawImage(view.surface,0,0,sample.width,sample.height);pixels=sampleCtx.getImageData(0,0,sample.width,sample.height);
     let raw;
-    if($('scope-mode').value==='histogram'){const path=view.scene.raw_path;if(path){const key=path+'/'+view.scene.actual_seconds;if(!originalCache.has(key))originalCache.set(key,(async()=>{const res=await fetch(`${path}?frame=${view.scene.actual_seconds||0}`);if(!res.ok)throw Error('Original signal unavailable.');return window.LUTScopes.histogram(new Uint16Array(await res.arrayBuffer()),3,65535);})().catch(error=>{originalCache.delete(key);throw error;}));raw=await originalCache.get(key);}else{const image=await window.LUTProduct.getImage('',view.scene.id);sampleCtx.drawImage(image,0,0,sample.width,sample.height);raw=window.LUTScopes.histogram(sampleCtx.getImageData(0,0,sample.width,sample.height).data);}}
-    if(job!==version)return;lastPixels=pixels;original=raw;draw();$('levels-status').textContent='Scopes updated for '+view.scene.label;
-   }catch(error){if(job===version)$('levels-status').textContent=error.message;}
+    if(scopeMode()==='histogram'){const path=view.scene.raw_path;if(path){const key=path+'/'+view.scene.actual_seconds;if(!originalCache.has(key))originalCache.set(key,(async()=>{const res=await fetch(`${path}?frame=${view.scene.actual_seconds||0}`);if(!res.ok)throw Error('Original signal unavailable.');return window.LUTScopes.histogram(new Uint16Array(await res.arrayBuffer()),3,65535);})().catch(error=>{originalCache.delete(key);throw error;}));raw=await originalCache.get(key);}else{const image=await window.LUTProduct.getImage('',view.scene.id);sampleCtx.drawImage(image,0,0,sample.width,sample.height);raw=window.LUTScopes.histogram(sampleCtx.getImageData(0,0,sample.width,sample.height).data);}}
+    if(job!==version)return;lastPixels=pixels;original=raw;draw();$('scope-error').hidden=true;$('levels-status').textContent='Scopes updated for '+view.scene.label;
+   }catch(error){if(job===version){if(pixels){lastPixels=pixels;original=null;draw();}$('scope-error').hidden=false;$('scope-error').title=error.message+' Refresh the page to reconnect.';$('levels-status').textContent=error.message;}}
   },60);
  }
- $('scope-expand').addEventListener('click',()=>{expanded=!expanded;panel.classList.toggle('scope-expanded',expanded);$('scope-expand').textContent=expanded?'Compact':'Expand';plot.width=expanded?640:400;plot.height=expanded?300:120;draw();window.LUTProduct.positionScopes();});
+ $('scope-expand').addEventListener('click',()=>{expanded=!expanded;panel.classList.toggle('scope-expanded',expanded);const label=expanded?'Compact histogram':'Expand scopes';$('scope-expand').setAttribute('aria-label',label);$('scope-expand').setAttribute('aria-expanded',String(expanded));$('scope-expand').title=label;$('scope-size-icon').setAttribute('d',expanded?'M3 8h5V3M21 8h-5V3M8 21v-5H3M16 21v-5h5':'M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5');$('scope-title').textContent=expanded?'Scopes':'Histogram';plot.width=expanded?640:400;plot.height=expanded?300:120;draw();update(scopeView());window.LUTProduct.positionScopes();});
  for(const id of ['scope-mode','scope-skin'])$(id).addEventListener('change',()=>update(scopeView()));
  for(const id of ['clip-shadows','clip-highlights','clip-low','clip-high'])$(id).addEventListener('change',()=>{try{draw();}catch(error){$('clipping-mask').hidden=true;window.LUTInspection?.setMask(null);$('scope-clipping').textContent=error.message;$('levels-status').textContent=error.message;}});
  window.LUTScopePanel={update,invalidate(){version++;clearTimeout(timer);$('clipping-mask').hidden=true;window.LUTInspection?.setMask(null);},position(){},hideMask(){ $('clipping-mask').hidden=true;}};

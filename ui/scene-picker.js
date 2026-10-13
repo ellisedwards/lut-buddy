@@ -62,7 +62,8 @@
  }
  function drawActions(){
   el('scene-picker-device').disabled=busy;
-  const count=checked.size,selectButton=el('scene-picker-select');selectButton.textContent=selecting?'Done':'Select';selectButton.setAttribute('aria-pressed',String(selecting));selectButton.disabled=busy;
+  el('scene-picker-import').disabled=busy||boot.canLinkOriginals===false;
+  const count=checked.size,selectButton=el('scene-picker-select');selectButton.setAttribute('aria-label',selecting?'Finish selecting scenes':'Select scenes');selectButton.title=selecting?'Finish selecting scenes':'Select scenes';selectButton.setAttribute('aria-pressed',String(selecting));selectButton.disabled=busy;
   el('scene-picker-actions').hidden=!selecting;el('scene-picker-count').textContent=`${count} selected`;const visible=visibleIds();el('scene-picker-select-all').textContent=visible.length&&visible.every(id=>checked.has(id))?'Deselect all':'Select all';el('scene-picker-select-all').disabled=busy||!visible.length;
   const add=el('scene-picker-add');add.replaceChildren(new Option('Add to…',''),...groups().map(c=>new Option(c.name,c.id)),new Option('New collection…','__new'));add.disabled=busy||!count;
   const removeButton=el('scene-picker-remove');removeButton.hidden=false;removeButton.disabled=busy||!count;removeButton.textContent=browsing?'Remove from collection':'Remove from project';removeButton.title=browsing?`Remove selected scenes from ${folder(browsing)?.name||'this collection'}. Keep them in All scenes.`:'Remove selected scenes from All scenes and every collection in this project. Original clips and saved files are kept; Undo is available.';
@@ -154,6 +155,12 @@
  }
  list.addEventListener('dragover',e=>{if(!dragging||busy)return;e.preventDefault();autoScroll(e.clientY);});
  list.addEventListener('drop',e=>{if(e.target!==list||!dragging)return;e.preventDefault();const source=dragging,target=visibleIds().filter(id=>!source.includes(id)).at(-1);clearDrag();if(target)move(source,target,true);});
+ el('scene-picker-import').addEventListener('click',async()=>{
+  if(busy)return;busy=true;panel.setAttribute('aria-busy','true');drawActions();status('Choose original clips…');
+  try{const result=await window.LUTLibrary.linkClips({collectionId:browsing,onLinked:()=>close()});if(!result.imported.length)status(result.errors.length?result.errors.join('\n'):'Selection cancelled.');}
+  catch(error){status(error.message);}
+  finally{busy=false;panel.removeAttribute('aria-busy');drawActions();}
+ });
  el('scene-picker-select').addEventListener('click',()=>setSelecting(!selecting));
  el('scene-picker-select-all').addEventListener('click',()=>{if(busy)return;const ids=visibleIds(),clear=ids.every(id=>checked.has(id));for(const id of ids)clear?checked.delete(id):checked.add(id);draw();});
  el('scene-picker-add').addEventListener('change',e=>{const id=e.target.value,ids=[...checked];if(id==='__new')newCollection(ids);else if(id)add(ids,id);e.target.value='';});

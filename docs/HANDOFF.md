@@ -5,6 +5,14 @@ licence. Keep the existing viewer as the base experience; do not redesign it.
 
 ## Current delivery
 
+The scene picker adds a **+** beside its list heading for linked clip intake,
+with the selection icon beside it. Adding from a collection preselects that
+collection in the frame-saving dialog. Coffee precedes the theme icon. The compact histogram keeps
+its inline **Orig. / Output** legend below the graph; an expand icon reveals the
+advanced controls. Measurement notes and counts are tooltips. If the original
+signal is unavailable, the output still plots and a small warning identifies
+the missing original rather than leaving a blank graph.
+
 New footage intake is **link-only** through the Mac native picker. The copying
 clip/folder buttons and browser video inputs are removed, and the old video-upload
 endpoint refuses requests before writing files. LUT uploads remain available.
@@ -25,7 +33,7 @@ the new full-resolution worker. Preserve this boundary.
 
 Local synthetic/browser checks cover these tools, independent colour swatches,
 actual downloads, narrow-screen layout and cancellation during inspection.
-The automated suite has 96 tests. Recheck the exact runtime/commit before claims.
+The automated suite has 98 tests. Recheck the exact runtime/commit before claims.
 
 The current source adds a subtle orange-black abbreviation band to converted
 LUT thumbnails and a **Converted from** source LUT/profile readout below the

@@ -63,3 +63,15 @@ test('Full-resolution inspection queues requests, cancels stale work and leaves 
   assert.equal(app.store.state().scenes[0].name,'Renamed during inspection');assert.deepEqual(app.store.state().luts,before.luts);assert.ok(!fs.readdirSync(path.join(root,'cache')).some(f=>f.endsWith('.rgb48le')));
  }finally{release?.();media.run=originalRun;if(app)await app.close();fs.rmSync(root,{recursive:true,force:true});}
 });
+
+test('An unavailable original signal still draws the output histogram and stale requests cannot blank the current plot',async()=>{
+ const vm=require('node:vm'),source=fs.readFileSync(require.resolve('../ui/scope-panel.js'),'utf8'),body=source.slice(source.indexOf(' async function update(view){'),source.indexOf(" $('scope-expand').addEventListener"));
+ const elements=new Map(),timers=[],drawn=[],pixels={width:1,height:1,data:new Uint8ClampedArray([90,100,110,255])};
+ const get=id=>{if(!elements.has(id))elements.set(id,{hidden:id==='scope-error',checked:false,textContent:''});return elements.get(id);};get('levels').hidden=false;
+ let fetcher=async()=>({ok:false});
+ const context=vm.createContext({$:get,panel:get('levels'),version:0,current:null,original:null,lastPixels:null,timer:0,originalCache:new Map(),sample:{},sampleCtx:{drawImage(){},getImageData:()=>pixels},scopeMode:()=> 'histogram',setTimeout:f=>{timers.push(f);return timers.length;},clearTimeout(){},fetch:(...args)=>fetcher(...args),window:{LUTScopes:require('../ui/scope-math.js')},draw:()=>drawn.push({original:context.original,pixels:context.lastPixels,current:context.current.scene.id}),Uint16Array});vm.runInContext(body,context);
+ context.view={scene:{id:'first',label:'First',raw_path:'raw/first'},surface:{width:1,height:1}};await vm.runInContext('update(view)',context);await timers.shift()();assert.equal(drawn.length,1);assert.equal(drawn[0].pixels,pixels);assert.equal(drawn[0].original,null);assert.equal(get('scope-error').hidden,false);
+ let release;const waiting=new Promise(r=>release=r);fetcher=()=>waiting;await vm.runInContext('update(view)',context);const stale=timers.shift()();
+ fetcher=async()=>({ok:true,arrayBuffer:async()=>new Uint16Array([100,200,300]).buffer});context.view={scene:{id:'latest',label:'Latest',raw_path:'raw/latest'},surface:{width:1,height:1}};await vm.runInContext('update(view)',context);await timers.shift()();const count=drawn.length;release({ok:false});await stale;
+ assert.equal(drawn.length,count);assert.equal(drawn.at(-1).current,'latest');assert.ok(drawn.at(-1).original);assert.equal(get('scope-error').hidden,true,'Old failures must not replace the current successful plot');
+});

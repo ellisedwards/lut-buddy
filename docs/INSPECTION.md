@@ -5,7 +5,10 @@ optional and do not change your original clips or LUT files.
 
 ## Scopes
 
-Open the histogram button (**H**), then **Expand** for a larger plot. Choose:
+Open the histogram button (**H**), then the expand icon for a larger plot and additional controls. The compact
+view keeps only the histogram and its **Orig. / Output** legend below the graph.
+Thresholds, clipping overlays and scope selection appear in the expanded view;
+measurement notes and clipping counts are available on hover. Choose:
 
 - **Histogram**: original encoded RGB values against the displayed output.
 - **RGB histogram**: separate red, green and blue traces on the same count scale.

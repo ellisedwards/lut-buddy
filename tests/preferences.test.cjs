@@ -109,3 +109,12 @@ test('Hidden LUTs do not delay the visible thumbnail row; revealing them loads t
  vm.runInContext('refreshSceneAssets()',context);await new Promise(r=>setImmediate(r));assert.deepEqual(loads,['new/visible']);assert.equal(tiles[0].querySelector().src,'new/visible');assert.equal(tiles[1].querySelector().src,'old/hidden');
  tiles[1].hidden=false;vm.runInContext('refreshSceneAssets()',context);await new Promise(r=>setImmediate(r));assert.equal(tiles[1].querySelector().src,'new/hidden');
 });
+
+test('Scene-picker intake leaves cancellation alone and opens saved-frame marking in the chosen collection',async()=>{
+ const librarySource=fs.readFileSync(require.resolve('../ui/library.js'),'utf8'),body=librarySource.slice(librarySource.indexOf(' async function linkClips('),librarySource.indexOf(" el('library-link-clips').addEventListener"));
+ const events=[],elements=new Map();let result={imported:[],errors:[]};
+ const context=vm.createContext({call:async()=>result,refresh:async()=>events.push('refresh'),message:text=>events.push(text),openClip:async id=>events.push('open:'+id),el:id=>{if(!elements.has(id))elements.set(id,{});return elements.get(id);}});vm.runInContext(body,context);context.options={collectionId:'collection',onLinked:()=>events.push('close-picker')};
+ await vm.runInContext('linkClips(options)',context);assert.ok(events.includes('Selection cancelled.'));assert.ok(!events.includes('close-picker'));assert.equal(elements.size,0);
+ events.length=0;result={imported:[{id:'original'}],errors:[]};await vm.runInContext('linkClips(options)',context);assert.ok(events.indexOf('close-picker')<events.indexOf('open:original'));assert.equal(elements.get('import-collection').value,'collection');
+ events.length=0;context.call=async()=>{throw Error('Picker unavailable');};await assert.rejects(vm.runInContext('linkClips(options)',context),/Picker unavailable/);assert.equal(events.length,0,'A failed chooser must not navigate away from the current picker');
+});
