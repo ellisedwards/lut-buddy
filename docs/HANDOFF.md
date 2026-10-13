@@ -13,7 +13,8 @@ advanced controls. Previous/next arrows switch all five scope types in both size
 expanding preserves the selected type and translucent background. Each size keeps
 a constant panel height when switching types. Measurement notes and counts are tooltips. If the original
 signal is unavailable, the output still plots and a small warning identifies
-the missing original rather than leaving a blank graph.
+the missing original rather than leaving a blank graph. Focus outlines are shown
+for keyboard use and clear when mouse/touch input resumes; focus itself is retained.
 
 New footage intake is **link-only** through the Mac native picker. The copying
 clip/folder buttons and browser video inputs are removed, and the old video-upload

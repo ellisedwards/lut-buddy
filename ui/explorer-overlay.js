@@ -1,4 +1,8 @@
 'use strict';
+// Keep keyboard focus cues, but clear their styling as soon as pointer input resumes.
+document.documentElement.dataset.focusInput='pointer';
+document.addEventListener('pointerdown',()=>{document.documentElement.dataset.focusInput='pointer';},true);
+document.addEventListener('keydown',event=>{if(!event.metaKey&&!event.ctrlKey&&!event.altKey&&!['Shift','Control','Alt','Meta'].includes(event.key))document.documentElement.dataset.focusInput='keyboard';},true);
 const productBoot=JSON.parse(document.getElementById('product-boot').textContent);
 window.LUTProduct={boot:productBoot,getSelection:()=>({...state}),selectScene:id=>{if(byScene.has(id)){$('scene').value=id;$('scene').dispatchEvent(new Event('change',{bubbles:true}));}},setSceneCollection:id=>{state.sceneCollection=id;save();},setSceneDevice:id=>{state.sceneDevice=id;save();},setSceneNavigation:ids=>{sceneNavigation=ids.filter(id=>byScene.has(id));$('scene').replaceChildren(...sceneNavigation.map(id=>makeOption(id,sceneLabels.get(id))));$('scene').value=state.scene;},getSceneNavigation:()=>[...sceneNavigation],sceneTitle:id=>sceneLabels.get(id),refresh:()=>render(),flush:async()=>{save();while(savingProject||pendingPrefs){await persistProject();await new Promise(r=>setTimeout(r,30));}}};
 const scenes = JSON.parse(document.getElementById('scenes-manifest').textContent);
