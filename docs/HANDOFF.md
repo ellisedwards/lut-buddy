@@ -1,4 +1,4 @@
-# LUT Pal developer handoff
+# LUT Library developer handoff
 
 Updated 2026-10-13. This is a Mac-first, single-user local web project with an MIT
 licence. Keep the existing viewer as the base experience; do not redesign it.
@@ -23,8 +23,9 @@ Saved scene previews and full-resolution exports work after a linked source goes
 missing. Existing video copies, backups and older project archives are preserved;
 this change does not delete or migrate them. Library labels these as stored copies.
 
-The app is now **LUT Pal**, with the owner-supplied corner wordmark and favicon.
-The launcher is `Start LUT Pal.command`; the source ZIP uses `LUT-Pal`. Existing
+The app is now **LUT Library**, with the owner-supplied colour icon beside the
+name and the same favicon. Light mode uses a white outer background.
+The launcher is `Start LUT Library.command`; the source ZIP uses `LUT-Library`. Existing
 library paths, project identifiers and writer locks remain compatible.
 
 Optional [inspection tools](INSPECTION.md) add expandable RGB-aware histograms,

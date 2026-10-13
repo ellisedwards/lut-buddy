@@ -474,7 +474,7 @@ $('backup-settings').addEventListener('click',()=>{downloadBlob(new Blob([JSON.s
 $('restore-settings').addEventListener('click',()=>$('settings-file').click());
 $('settings-file').addEventListener('change',async event=>{
  const file=event.target.files[0];if(!file)return;
- try{const saved=JSON.parse(await file.text());if(saved.version!==1||!saved.state||typeof saved.state!=='object')throw new Error('Choose a LUT Pal settings backup.');
+ try{const saved=JSON.parse(await file.text());if(saved.version!==1||!saved.state||typeof saved.state!=='object')throw new Error('Choose a LUT Library settings backup.');
   try{localStorage.setItem('ellis-lut-explorer-before-import',JSON.stringify(state));}catch{}
   state.adjustments={};restorePreferences(saved.state);state.comparing=false;applyTheme();$('reference').value=state.reference;
   thumbnailScene=null;await render();$('backup-status').textContent='Settings restored.';

@@ -1,6 +1,6 @@
 # Inspecting and exporting a look
 
-LUT Pal keeps the existing viewer, strip and Compare button. The extra tools are
+LUT Library keeps the existing viewer, strip and Compare button. The extra tools are
 optional and do not change your original clips or LUT files.
 
 ## Scopes

@@ -1,6 +1,6 @@
-# Contributing to LUT Buddy
+# Contributing to LUT Library
 
-LUT Buddy is a local, single-user browser tool. The existing viewer is the base:
+LUT Library is a local, single-user browser tool. The existing viewer is the base:
 preserve its image-first layout, LUT strip, comparison behavior and themes.
 
 Use Node.js 22+, run `npm ci`, then `npm test`. Run `npm start` to browse.

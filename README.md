@@ -1,6 +1,6 @@
-# LUT Pal
+# LUT Library
 
-Previously named LUT Buddy. Existing libraries and project files continue to work.
+Existing libraries and project files continue to work.
 
 A Mac-first, single-user local tool for browsing your footage through your LUTs. The large image, floating LUT strip, comparisons, adjustments and light/dark themes remain the base experience.
 
@@ -8,7 +8,7 @@ A Mac-first, single-user local tool for browsing your footage through your LUTs.
 
 1. Install [Node.js](https://nodejs.org/) 22 or newer once.
 2. Download this project as a ZIP and unzip it, or clone its repository.
-3. Double-click **Start LUT Pal.command**. The first run installs its video tools and needs internet access. Keep the Terminal window open while using the viewer; Control+C stops it.
+3. Double-click **Start LUT Library.command**. The first run installs its video tools and needs internet access. Keep the Terminal window open while using the viewer; Control+C stops it.
 
 The browser opens `http://127.0.0.1:53631`. Later runs work offline for browsing and imports; optional AI suggestions need internet access. If macOS blocks a downloaded launcher, you can run `npm ci` then `npm start` from this folder in Terminal and open that address. This is a local web project: it does require Node, but doesn't require Python, Codex or a packaged Mac application.
 
@@ -93,12 +93,12 @@ it. Renaming is saved, travels with project exports, and supports Undo/Redo.
 
 ## Optional AI suggestions
 
-LUT Pal is an independent project. Its local AI connection code adapts the
+LUT Library is an independent project. Its local AI connection code adapts the
 technique from Ellis’s other projects; those apps are not required or connected.
 
 Open **Library → AI tools** to check your installed **Claude Code** or **Codex**
 tool. Sign in through the official tool once if needed, then choose **Check
-connection**. Your existing login is used; LUT Pal does not collect login
+connection**. Your existing login is used; LUT Library does not collect login
 tokens. The status shows subscription or API billing where established. Calls
 use the chosen tool’s normal account limits and may fail if its limits are used up.
 
@@ -129,7 +129,7 @@ recheck provider integration terms and use the supported distribution/auth route
 
 ## Local storage and backup
 
-New clips are **linked in place**. LUT Pal stores full-resolution captured frames, previews, metadata, LUTs and settings in `~/Documents/LUT Explorer Library`; it does not copy new whole videos into that folder. After **Save scenes** finishes, saved scenes keep working when the source drive disconnects. Video copies created by older imports remain intact and are labelled **stored copy** in Library. Original files stay unchanged. There is no LUT Pal account or hosted library. Original videos, decoding and library storage stay local. If an AI tool is connected, automatic import drafts send selected preview images and details to that provider. Moving or deleting the source card does not break copied clips or captured scenes. Linked originals stay outside the library and are excluded from backups and project exports; captured scenes and their settings are still included. After reopening a project, link the originals again to capture more frames.
+New clips are **linked in place**. LUT Library stores full-resolution captured frames, previews, metadata, LUTs and settings in `~/Documents/LUT Explorer Library`; it does not copy new whole videos into that folder. After **Save scenes** finishes, saved scenes keep working when the source drive disconnects. Video copies created by older imports remain intact and are labelled **stored copy** in Library. Original files stay unchanged. There is no LUT Library account or hosted library. Original videos, decoding and library storage stay local. If an AI tool is connected, automatic import drafts send selected preview images and details to that provider. Moving or deleting the source card does not break copied clips or captured scenes. Linked originals stay outside the library and are excluded from backups and project exports; captured scenes and their settings are still included. After reopening a project, link the originals again to capture more frames.
 
 **Library → Save project** downloads a `.lutproject` file containing the current project's scenes, collections, LUT library, favourites, ordering and adjustments. Linked originals stay outside the archive. Existing stored video copies from older imports are still included for compatibility. Files stream to the archive; camera footage does not have to fit in memory. **Open project** opens a separate project copy. Matching LUT contents are reused, preserving the existing shared library's names and descriptions. Saved preferences are mapped to the new scene/LUT identifiers. The current project remains intact. Legacy scenes retain their images and gallery previews; migrated source card footage is not copied unless it was imported into the library.
 
@@ -194,7 +194,7 @@ The coffee icon beside the theme toggle opens a small support popover. Its
 it, set `data-donation-url` on `#coffee-popover` in `ui/index.html` to your
 donation page's full HTTPS URL (for example, your own
 Buy Me a Coffee or Ko-fi page). Until configured it says **Donations coming soon**.
-The link opens the donation service in a separate tab; LUT Pal processes no
+The link opens the donation service in a separate tab; LUT Library processes no
 payments and the tool remains available without donating.
 
 ## Storage, restarting and updates
@@ -216,7 +216,7 @@ for compatibility. The launcher detects an older running source build.
 
 ## Licence and contributing
 
-LUT Pal’s own code is **MIT licensed**. Imported LUTs and footage retain their
+LUT Library’s own code is **MIT licensed**. Imported LUTs and footage retain their
 owners’ rights. [Third-party notices](THIRD_PARTY.md) cover dependencies, including
 the video tools; they are not bundled in the source release. Donations are
 optional. No account is needed for ordinary importing and browsing.
