@@ -66,7 +66,8 @@ recording profile separately. A ported target is retained with its saved copy.
 Porting creates a linked **33-point CUBE**, keeps the original, copies a starred
 source's favourite status in the active project and reuses an existing matching
 version. A small copy icon in the Library and thumbnail strip identifies a port.
-Converted thumbnails also have a subtly warm, nearly black abbreviation band.
+Converted thumbnails have a subtly warm caption band: nearly black in dark mode
+and warm white in light mode.
 The viewer footer shows **Converted from** with the source LUT and recording
 profile; original LUTs keep their usual styling.
 Further ports use the original look when available, avoiding repeated sampling.
@@ -147,6 +148,9 @@ The current library format is version 7. Existing libraries receive a database b
 
 ## Inspection and adjusted exports
 
+Choose the **Reference** look in **Library → LUTs**. The main **Compare** button
+or **Space** switches between that reference and your selected look.
+
 The histogram button (**H**) now offers an expandable histogram, separate RGB
 channels, waveform, RGB parade, vectorscope and clipping warnings. The magnifier
 button offers Wipe / Side by side, original-resolution 100% zoom, full-resolution
@@ -155,7 +159,7 @@ remain unchanged. [How to use these tools and their limits](docs/INSPECTION.md).
 
 ## What has been verified
 
-- The established viewer remains the base experience, with optional inspection tools and the owner-supplied wordmark verified in both themes.
+- The established viewer remains the base experience, with optional inspection tools and the owner-supplied colour icon and current app name verified in both themes.
 - Mixed-profile clips in one project: multi-frame capture, profile-specific LUT matching and cleared incompatible selections.
 - Captured fractional-rate and variable-rate frames match an independent RGB decode of the original frames. Scrub previews also match independent frame selection, including clips with a nonzero start timestamp.
 - Original CUBE contents remain unchanged; malformed grids, unsupported shaper LUTs and mismatched declared profiles are rejected.

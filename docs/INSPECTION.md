@@ -46,7 +46,7 @@ explains the skin guide's position between the red and yellow targets.
 ## Compare and zoom
 
 Open the magnifier button for **Inspect & export**. Choose Wipe or Side by side
-against the existing Reference selection. Both sides use the same scene
+against the **Reference** look chosen in **Library → LUTs**. Both sides use the same scene
 adjustments. The original Compare/Space behaviour remains available in Toggle.
 
 **100%** loads the saved original-resolution scene image, rather than enlarging

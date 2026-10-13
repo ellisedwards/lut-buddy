@@ -244,8 +244,6 @@ async function render({persist=true}={}) {
   const provenance=origin?` · Converted from ${origin.sourceName||'source LUT'}${sourceProfile?' · '+sourceProfile:''}`:'';
   $('look-detail').textContent=(r?`${r.maker} · ${r.code}`:'Untreated log image')+provenance+(comparing?` · comparing against ${label(state.selected)}`:'');
   $('look-detail').title=origin?$('look-detail').textContent:'';
-  $('badge-text').textContent=comparing?'Comparison':(name?'Selected LUT':'No LUT');
-  $('badge').classList.toggle('reference',comparing);
   const adjusted=await renderAdjustments(name,scene,version);
   if(version!==renderVersion)return;
   // Publish only the finished preview. Keep the previous surface during loading.

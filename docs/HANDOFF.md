@@ -5,6 +5,12 @@ licence. Keep the existing viewer as the base experience; do not redesign it.
 
 ## Current delivery
 
+The Reference look selector is in **Library → LUTs**; the main Compare button
+and Space shortcut retain their behavior. The floating Selected LUT badge is
+removed. Light-mode searches/dropdowns inherit their surrounding surface, and
+thumbnail captions use white bands (slightly warm for converted copies). Scene,
+scope titles and active filters use weight 700; buttons and other labels use 500.
+
 The scene picker adds a **+** beside its list heading for linked clip intake,
 with the selection icon beside it. Adding from a collection preselects that
 collection in the frame-saving dialog. Coffee precedes the theme icon. The compact histogram keeps
@@ -41,10 +47,10 @@ Local synthetic/browser checks cover these tools, independent colour swatches,
 actual downloads, narrow-screen layout and cancellation during inspection.
 The automated suite has 98 tests. Recheck the exact runtime/commit before claims.
 
-The current source adds a subtle orange-black abbreviation band to converted
-LUT thumbnails and a **Converted from** source LUT/profile readout below the
-viewer. The existing copy indicator remains. Original LUT styling and files are
-unchanged. Comparison mode describes the LUT actually being displayed; narrow
+Converted LUT thumbnails use a subtle orange-black abbreviation band in dark
+mode and a warm white band in light mode. The **Converted from** readout below
+the viewer names the source LUT/profile. The existing copy indicator remains.
+LUT files are unchanged; caption styling follows the selected theme. Comparison mode describes the LUT actually being displayed; narrow
 screens retain a single-line readout with full provenance available on hover.
 
 All scenes now supports **Select → Remove from project**, including bulk removal
