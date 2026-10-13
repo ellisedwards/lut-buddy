@@ -152,7 +152,8 @@ Choose the **Reference** look in **Library → LUTs**. The main **Compare** butt
 or **Space** switches between that reference and your selected look.
 
 The histogram button (**H**) now offers an expandable histogram, separate RGB
-channels, waveform, RGB parade, vectorscope and clipping warnings. The magnifier
+channels, waveform, RGB parade, vectorscope and clipping warnings. **Shift +
+Left/Right** cycles scope types and opens the panel if hidden. The magnifier
 button offers Wipe / Side by side, original-resolution 100% zoom, full-resolution
 16-bit PNG export and a separate adjusted 33-point CUBE. Original clips and LUTs
 remain unchanged. [How to use these tools and their limits](docs/INSPECTION.md).

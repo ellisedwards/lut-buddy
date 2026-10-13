@@ -118,3 +118,16 @@ test('Scene-picker intake leaves cancellation alone and opens saved-frame markin
  events.length=0;result={imported:[{id:'original'}],errors:[]};await vm.runInContext('linkClips(options)',context);assert.ok(events.indexOf('close-picker')<events.indexOf('open:original'));assert.equal(elements.get('import-collection').value,'collection');
  events.length=0;context.call=async()=>{throw Error('Picker unavailable');};await assert.rejects(vm.runInContext('linkClips(options)',context),/Picker unavailable/);assert.equal(events.length,0,'A failed chooser must not navigate away from the current picker');
 });
+
+test('Shift arrows open and cycle scopes without changing LUTs or intercepting text/dialog keys',()=>{
+ const body=source.slice(source.indexOf("window.addEventListener('keydown',event=>{"),source.indexOf("$('viewer').append($('about-dialog'))"));
+ let handler,typing=false,modal=false,opens=0;const steps=[],elements=new Map([['levels',{hidden:true}],['about-dialog',{open:false}]]);
+ const get=id=>{if(!elements.has(id))elements.set(id,{});return elements.get(id);};get('histogram-toggle').click=()=>{opens++;get('levels').hidden=false;};
+ const context=vm.createContext({window:{addEventListener:(type,fn)=>{if(type==='keydown')handler=fn;}},LUTScopePanel:{step:delta=>steps.push(delta)},document:{querySelector:()=>modal?{}:null},$:get,scenes:[{}],lutReorderMode:false,state:{selected:'first'},visibleNames:()=>['first','second'],select:name=>{context.state.selected=name;}});vm.runInContext(body,context);
+ const press=extra=>{const event={key:'ArrowRight',shiftKey:true,isComposing:false,defaultPrevented:false,target:{closest:()=>typing?{}:null},preventDefault(){this.defaultPrevented=true;},...extra};handler(event);return event;};
+ assert.equal(press().defaultPrevented,true);assert.equal(opens,1);assert.equal(get('levels').hidden,false);assert.deepEqual(steps,[1]);assert.equal(context.state.selected,'first');
+ press({key:'ArrowLeft'});context.lutReorderMode=true;press({key:'ArrowLeft'});assert.equal(opens,1);assert.deepEqual(steps,[1,-1,-1],'Shift arrows must not reorder the LUT strip');context.lutReorderMode=false;
+ get('levels').hidden=true;typing=true;assert.equal(press().defaultPrevented,false);typing=false;modal=true;assert.equal(press().defaultPrevented,false);modal=false;
+ for(const flag of ['altKey','ctrlKey','metaKey','isComposing','defaultPrevented'])press({[flag]:true});context.scenes=[];press();context.scenes=[{}];assert.equal(opens,1);assert.deepEqual(steps,[1,-1,-1]);assert.equal(get('levels').hidden,true);
+ press({shiftKey:false});assert.equal(context.state.selected,'second','Unmodified arrows retain ordinary LUT navigation');assert.equal(opens,1);
+});

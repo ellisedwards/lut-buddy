@@ -59,6 +59,6 @@
  $('scope-prev').addEventListener('click',()=>stepMode(-1));$('scope-next').addEventListener('click',()=>stepMode(1));
  $('scope-skin').addEventListener('change',()=>draw());
  for(const id of ['clip-shadows','clip-highlights','clip-low','clip-high'])$(id).addEventListener('change',()=>{try{draw();}catch(error){$('clipping-mask').hidden=true;window.LUTInspection?.setMask(null);$('scope-clipping').textContent=error.message;$('levels-status').textContent=error.message;}});
- window.LUTScopePanel={update,redraw:draw,invalidate(){version++;clearTimeout(timer);$('clipping-mask').hidden=true;window.LUTInspection?.setMask(null);},position(){},hideMask(){ $('clipping-mask').hidden=true;}};
+ window.LUTScopePanel={update,step:stepMode,redraw:draw,invalidate(){version++;clearTimeout(timer);$('clipping-mask').hidden=true;window.LUTInspection?.setMask(null);},position(){},hideMask(){ $('clipping-mask').hidden=true;}};
  window.LUTScopePanel.update(window.LUTProduct.getView());
 })();

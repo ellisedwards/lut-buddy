@@ -119,7 +119,7 @@ $('scene').append(cardGroup,sampleGroup);$('scene').value=state.scene;
 // The menu groups footage before demos; scene shortcuts must use that same order.
 let sceneNavigation=[...$('scene').options].map(option=>option.value);
 const sceneLabels=new Map([...$('scene').options].map(option=>[option.value,option.textContent]));
-for(const [id,key] of Object.entries({'strip-toggle':'L','camera-info':'C','histogram-toggle':'H','adjust-open':'E',favourite:'F',fullscreen:'M',theme:'T','adjust-bypass':'B',toggle:'Space','filter-all':'A','filter-favourites':'A',about:'Shift+/'}))$(id).setAttribute('aria-keyshortcuts',key);
+for(const [id,key] of Object.entries({'strip-toggle':'L','camera-info':'C','histogram-toggle':'H Shift+ArrowLeft Shift+ArrowRight','adjust-open':'E',favourite:'F',fullscreen:'M',theme:'T','adjust-bypass':'B',toggle:'Space','filter-all':'A','filter-favourites':'A',about:'Shift+/'}))$(id).setAttribute('aria-keyshortcuts',key);
 $('filter-all').title='Show all compatible LUTs (A toggles favourites)';$('filter-favourites').title='Show favourites (A)';
 $('scene-count').textContent=`${records.length} looks · ${scenes.length} scenes`;
 $('reference').append(makeOption('','X · No LUT / original log'));
@@ -394,6 +394,11 @@ $('scroll-left').addEventListener('click',()=>tiles.scrollBy({left:-tiles.client
 $('scroll-right').addEventListener('click',()=>tiles.scrollBy({left:tiles.clientWidth*.7,behavior:'smooth'}));
 window.addEventListener('keydown',event=>{
  if(event.isComposing||event.defaultPrevented)return;
+ if(event.shiftKey&&['ArrowLeft','ArrowRight'].includes(event.key)){
+  if(document.querySelector('dialog[open]')||!scenes.length||event.target.closest?.('select,input,textarea,[contenteditable]:not([contenteditable="false"])')||event.altKey||event.ctrlKey||event.metaKey)return;
+  event.preventDefault();if($('levels').hidden)$('histogram-toggle').click();
+  globalThis.LUTScopePanel?.step(event.key==='ArrowRight'?1:-1);return;
+ }
  if(lutReorderMode){if(event.key==='Escape'){event.preventDefault();finishLutReorder();}else if(['ArrowLeft','ArrowRight'].includes(event.key)&&tiles.contains(event.target)){event.preventDefault();const visible=[...tiles.querySelectorAll('.tile')].filter(t=>!t.hidden),index=visible.indexOf(event.target),next=index+(event.key==='ArrowLeft'?-1:1);if(next>=0&&next<visible.length){[visible[index],visible[next]]=[visible[next],visible[index]];let cursor=0;applyLutOrder([...tiles.querySelectorAll('.tile')].map(t=>t.hidden?t.dataset.name:visible[cursor++].dataset.name));event.target.focus({preventScroll:true});event.target.scrollIntoView({block:'nearest',inline:'nearest'});orderDirty=true;saveLutOrder();}}return;}
  if(event.key==='Escape'&&$('viewer').classList.contains('expanded')){event.preventDefault();$('viewer').classList.remove('expanded');syncFullscreen();return;}
  if(event.key==='Escape'&&!$('adjust-panel').hidden){showAdjustmentPanel(false);return;}

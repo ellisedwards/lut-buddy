@@ -15,8 +15,10 @@ The scene picker adds a **+** beside its list heading for linked clip intake,
 with the selection icon beside it. Adding from a collection preselects that
 collection in the frame-saving dialog. Coffee precedes the theme icon. The compact histogram keeps
 its inline **Orig. / Output** legend below the graph; an expand icon reveals the
-advanced controls. Previous/next arrows switch all five scope types in both sizes;
-expanding preserves the selected type and translucent background. Each size keeps
+advanced controls. Previous/next arrows and **Shift + Left/Right** switch all five
+scope types in both sizes. The shortcut opens a hidden panel; text fields and
+modal dialogs retain their normal keyboard behavior.
+Expanding preserves the selected type and translucent background. Each size keeps
 a constant panel height when switching types. Measurement notes and counts are tooltips. If the original
 signal is unavailable, the output still plots and a small warning identifies
 the missing original rather than leaving a blank graph. Focus outlines are shown
@@ -45,7 +47,7 @@ the new full-resolution worker. Preserve this boundary.
 
 Local synthetic/browser checks cover these tools, independent colour swatches,
 actual downloads, narrow-screen layout and cancellation during inspection.
-The automated suite has 98 tests. Recheck the exact runtime/commit before claims.
+The automated suite has 99 tests. Recheck the exact runtime/commit before claims.
 
 Converted LUT thumbnails use a subtle orange-black abbreviation band in dark
 mode and a warm white band in light mode. The **Converted from** readout below
