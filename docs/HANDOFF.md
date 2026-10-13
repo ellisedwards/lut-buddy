@@ -9,7 +9,8 @@ The scene picker adds a **+** beside its list heading for linked clip intake,
 with the selection icon beside it. Adding from a collection preselects that
 collection in the frame-saving dialog. Coffee precedes the theme icon. The compact histogram keeps
 its inline **Orig. / Output** legend below the graph; an expand icon reveals the
-advanced controls. Measurement notes and counts are tooltips. If the original
+advanced controls. Previous/next arrows switch all five scope types in both sizes;
+expanding preserves the selected type and translucent background. Measurement notes and counts are tooltips. If the original
 signal is unavailable, the output still plots and a small warning identifies
 the missing original rather than leaving a blank graph.
 
