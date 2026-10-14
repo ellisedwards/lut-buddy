@@ -6,7 +6,8 @@ optional and do not change your original clips or LUT files.
 ## Scopes
 
 Open the histogram button (**H**), then the expand icon for a larger plot and additional controls. The compact
-view keeps the graph and its **Orig. / Output** legend below it. Use the previous/next
+view keeps the graph and its **Orig. / Output** legend below it when both signals
+are available. Single-signal scopes omit the legend without resizing the panel. Use the previous/next
 arrows beside the scope name, or **Shift + Left/Right**, to switch types in either size.
 The shortcut opens the panel if hidden and leaves text editing and dialogs alone; resizing preserves
 the selected type and translucent background. Switching types keeps the panel size fixed. Thresholds and clipping overlays appear in the expanded view;

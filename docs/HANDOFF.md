@@ -7,14 +7,15 @@ licence. Keep the existing viewer as the base experience; do not redesign it.
 
 The Reference look selector is in **Library → LUTs**; the main Compare button
 and Space shortcut retain their behavior. The floating Selected LUT badge is
-removed. Light-mode searches/dropdowns inherit their surrounding surface, and
-thumbnail captions use white bands (slightly warm for converted copies). Scene,
+removed. Searches/dropdowns inherit their surrounding surface in both themes, and
+light-mode thumbnail captions use white bands (slightly warm for converted copies). Scene,
 scope titles and active filters use weight 700; buttons and other labels use 500.
 
 The scene picker adds a **+** beside its list heading for linked clip intake,
 with the selection icon beside it. Adding from a collection preselects that
 collection in the frame-saving dialog. Coffee precedes the theme icon. The compact histogram keeps
-its inline **Orig. / Output** legend below the graph; an expand icon reveals the
+its inline **Orig. / Output** legend below the graph when both signals are available.
+Other scopes and output-only histograms omit both keys while keeping the box size fixed; an expand icon reveals the
 advanced controls. Previous/next arrows and **Shift + Left/Right** switch all five
 scope types in both sizes. The shortcut opens a hidden panel; text fields and
 modal dialogs retain their normal keyboard behavior.

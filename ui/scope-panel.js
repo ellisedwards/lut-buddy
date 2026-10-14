@@ -13,7 +13,8 @@
  function draw(){
   if(!lastPixels||!current?.scene)return;const mode=scopeMode(),w=plot.width,h=plot.height;ctx.clearRect(0,0,w,h);
   const output=window.LUTScopes.histogram(lastPixels.data),rec709=current.record?current.record.output==='rec709':current.scene.profile==='rec709';
-  $('scope-source').textContent=current.comparing?'Reference preview':'Displayed preview';$('levels-output-label').textContent=current.comparing?'Reference':'Output';$('levels-axis').style.visibility=['histogram','rgb'].includes(mode)?'visible':'hidden';panel.querySelector('.log-key').hidden=mode!=='histogram';panel.querySelector('.log-key').classList.toggle('scope-unavailable',mode==='histogram'&&!original);panel.querySelector('.log-key').title=original?'Original scene signal':'Original signal unavailable; only Output is plotted.';
+  $('scope-source').textContent=current.comparing?'Reference preview':'Displayed preview';$('levels-output-label').textContent=current.comparing?'Reference':'Output';$('levels-axis').style.visibility=['histogram','rgb'].includes(mode)?'visible':'hidden';
+  const hasComparison=mode==='histogram'&&Boolean(original?.combined);panel.querySelector('.log-key').hidden=!hasComparison;$('levels-output-label').hidden=!hasComparison;panel.querySelector('.log-key').title='Original scene signal';
   if(mode==='histogram'){const originalBins=original?.combined,ratio=originalBins?output.combined.reduce((a,b)=>a+b,0)/Math.max(1,originalBins.reduce((a,b)=>a+b,0)):1;window.LUTLevels.draw(plot,originalBins?Float64Array.from(originalBins,n=>n*ratio):null,output.combined,isLight());}
   else if(mode==='rgb'){const peak=Math.max(1,...output.rgb.flatMap(bins=>Array.from(bins)));output.rgb.forEach((bins,i)=>trace(bins,colours[i],w,h,3,w-3,peak));}
   else if(mode==='waveform'||mode==='parade'){
