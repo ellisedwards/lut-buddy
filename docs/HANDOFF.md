@@ -36,7 +36,8 @@ The app is now **LUT Library**, with the owner's original square colour icon
 beside the name and as the favicon, restored at its previous 21.6px size.
 The name uses white text in dark mode and dark
 text in light mode. Light mode uses a white outer background and a
-72% white glass layer for floating panels and viewer buttons. Theme changes
+72% white glass layer for floating panels and viewer buttons. The light-mode LUT
+bar uses a lighter 28% white fill with the same 22px glass blur. Theme changes
 redraw the cached scope with the matching line colours, without reloading media.
 The launcher is `Start LUT Library.command`; the source ZIP uses `LUT-Library`. Existing
 library paths, project identifiers and writer locks remain compatible.
