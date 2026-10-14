@@ -1,5 +1,12 @@
 // Public source only: personal libraries, binaries and old prototypes stay local.
 module.exports=[
+  "src/motion.cjs",
+  "src/shoot.cjs",
+  "ui/motion.js",
+  "ui/shoot.js",
+  "ui/shoot.css",
+  "tests/shoot-motion.test.cjs",
+  "docs/SHOOT-MOTION.md",
   "src/quicktime-log.cjs",
   "tests/quicktime-log.test.cjs",
   "tests/import-coverage.test.cjs",

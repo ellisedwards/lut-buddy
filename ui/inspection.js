@@ -62,6 +62,6 @@
  }
  $('export-full-png').addEventListener('click',e=>exportView('png',e.currentTarget));$('export-adjusted-cube').addEventListener('click',e=>exportView('cube',e.currentTarget));
  window.addEventListener('resize',geometry);
- window.LUTInspection={update,setCompareMode:setMode,hasComparison:()=>mode!=='toggle',getScopeSurface:()=>fullA,setMask:value=>{mask=value;if(mask)copy($('inspection-mask'),mask);geometry();},invalidate(){job++;fullA=null;controller?.abort();refRenderer?.cancel();},exportView};
+ window.LUTInspection={enterMotion(){job++;controller?.abort();mode='toggle';zoom=false;fullA=null;mask=null;viewBox.hidden=true;$('inspection-mode').value='toggle';geometry();},update,setCompareMode:setMode,hasComparison:()=>mode!=='toggle',getScopeSurface:()=>fullA,setMask:value=>{mask=value;if(mask)copy($('inspection-mask'),mask);geometry();},invalidate(){job++;fullA=null;controller?.abort();refRenderer?.cancel();},exportView};
  window.LUTInspection.update(product.getView());
 })();

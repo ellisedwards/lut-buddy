@@ -2,10 +2,10 @@
 // Store only edited fields: undo must not roll back later imports or navigation.
 const {randomUUID}=require('node:crypto');
 const definitions={
- projects:['id','name'],collections:['id','project_id','name'],memberships:['scene_id','collection_id'],scene_orders:['project_id','scope','scene_id','position'],collection_orders:['project_id','collection_id','position'],
+ styles:['id','name','lut_id','family','details'],projects:['id','name'],collections:['id','project_id','name'],memberships:['scene_id','collection_id'],scene_orders:['project_id','scope','scene_id','position'],collection_orders:['project_id','collection_id','position'],
  scenes:['id','name','tags','details','deleted'],luts:['id','name','input','output','favourite','details','position'],clips:['id','profile']
 };
-const keys={projects:['id'],collections:['id'],memberships:['scene_id','collection_id'],scene_orders:['project_id','scope','scene_id'],collection_orders:['collection_id'],scenes:['id'],luts:['id'],clips:['id']};
+const keys={styles:['id'],projects:['id'],collections:['id'],memberships:['scene_id','collection_id'],scene_orders:['project_id','scope','scene_id'],collection_orders:['collection_id'],scenes:['id'],luts:['id'],clips:['id']};
 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 function capture(store){const data={};for(const [table,columns]of Object.entries(definitions))data[table]=store.query(`SELECT rowid AS _rowid,${columns.join(',')} FROM ${table}`);const favourites=store.query('SELECT * FROM luts WHERE favourite=1').map(l=>JSON.parse(l.details).legacy?l.original_name:`${l.id}.cube`);data.ui=store.query('SELECT id FROM projects').map(p=>{const r=store.query('SELECT state FROM ui_state WHERE project_id=?',[p.id])[0];return {project_id:p.id,...(r?JSON.parse(r.state):{favourites,adjustments:{}})};});return data;}
 function difference(before,after){const changes=[];for(const table of Object.keys(definitions)){
@@ -17,7 +17,7 @@ function difference(before,after){const changes=[];for(const table of Object.key
   if(fields.length)changes.push({table,key:keys[table].map(k=>[k,(old||next)[k]]),fields,before:old||null,after:next||null});
  }
  }
- const a=new Map(before.ui.map(r=>[r.project_id,r])),b=new Map(after.ui.map(r=>[r.project_id,r]));for(const id of new Set([...a.keys(),...b.keys()])){const old=a.get(id),next=b.get(id);for(const field of ['favourites','adjustments','lutOrder'])if(!equal(old?.[field],next?.[field]))changes.push({table:'ui_state',projectId:id,field,before:old?.[field]??null,after:next?.[field]??null});}
+ const a=new Map(before.ui.map(r=>[r.project_id,r])),b=new Map(after.ui.map(r=>[r.project_id,r]));for(const id of new Set([...a.keys(),...b.keys()])){const old=a.get(id),next=b.get(id);for(const field of ['favourites','adjustments','lutOrder','sceneLooks'])if(!equal(old?.[field],next?.[field]))changes.push({table:'ui_state',projectId:id,field,before:old?.[field]??null,after:next?.[field]??null});}
  return changes;}
 function status(store,projectId){const filter=projectId?" AND json_extract(patch,'$.projectId')=?":'',args=projectId?[projectId]:[];return {undo:store.query('SELECT id,label FROM edit_history WHERE undone=0'+filter+' ORDER BY id DESC LIMIT 1',args)[0]||null,redo:store.query('SELECT id,label FROM edit_history WHERE undone=1'+filter+' ORDER BY id LIMIT 1',args)[0]||null};}
 function apply(store,redo=false,projectId){const entry=status(store,projectId)[redo?'redo':'undo'];if(!entry)return false;

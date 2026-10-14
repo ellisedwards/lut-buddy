@@ -49,7 +49,7 @@ explains the skin guide's position between the red and yellow targets.
 
 Open the magnifier button for **Inspect & export**. Choose Wipe or Side by side
 against the **Reference** look chosen in **Library → LUTs**. Both sides use the same scene
-adjustments. The original Compare/Space behaviour remains available in Toggle.
+adjustments. Compare / **V** remains available in Toggle. **Space** controls optional motion.
 
 **100%** loads the saved original-resolution scene image, rather than enlarging
 its 1280-pixel preview. One image pixel occupies one CSS pixel; Retina screens
@@ -93,3 +93,16 @@ narrow screens. Seven known colour swatches agree with an independent calculatio
 PNG error ≤ 1/65535, browser screenshot error ≤ 2/255 after its embedded display
 profile is accounted for, and portable CUBE error < 0.005 for those samples.
 These checks do not establish calibrated monitor or physical camera matching.
+
+## Moving scenes
+
+While motion plays or is paused, scopes sample the displayed moving frame and
+its ungraded companion frame together. They do not compare moving output to the
+pinned still. Source compression and browser video decoding can introduce small
+differences; full-resolution stills remain the approval reference.
+
+Opening Inspect returns to the pinned still. Its zoom and export actions process
+that saved still. To export another moment, pause motion and choose **Save
+another still** first; that action requires the original and preserves the shot's
+corrections and displayed look. Motion is a look-review loop, with no editing
+tracks, audio mixing, transitions or final-film rendering.

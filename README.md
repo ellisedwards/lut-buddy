@@ -144,12 +144,12 @@ LUT_EXPLORER_DATA="/absolute/path/to/my/library" LUT_EXPLORER_PORT=53632 npm sta
 
 The server listens only on this computer's loopback interface. Run one service per library; do not start two processes against the same library folder.
 
-The current library format is version 7. Existing libraries receive a database backup before upgrading. Upgrades preserve scenes and settings, add collection ordering and persistent edit history, and group existing demo scenes once without duplicating them.
+The current library format is version 8. Existing libraries receive a database backup before upgrading. Upgrades preserve scenes and settings, add collection ordering and persistent edit history, and group existing demo scenes once without duplicating them.
 
 ## Inspection and adjusted exports
 
 Choose the **Reference** look in **Library → LUTs**. The main **Compare** button
-or **Space** switches between that reference and your selected look.
+or **V** switches between that reference and your selected look. **Space** plays or pauses the optional moving scene.
 
 The histogram button (**H**) now offers an expandable histogram, separate RGB
 channels, waveform, RGB parade, vectorscope and clipping warnings. **Shift +
@@ -157,6 +157,35 @@ Left/Right** cycles scope types and opens the panel if hidden. The magnifier
 button offers Wipe / Side by side, original-resolution 100% zoom, full-resolution
 16-bit PNG export and a separate adjusted 33-point CUBE. Original clips and LUTs
 remain unchanged. [How to use these tools and their limits](docs/INSPECTION.md).
+
+## Shoot view, saved styles and moving scenes
+
+Open the grid icon beside All / Favourites for **Shoot view**. Choose the current
+scenes, all scenes or a collection; try a look, select shots and **Apply to
+selected**. Compatible linked camera versions are chosen together. Exposure,
+relative white balance and bypass stay with each shot. Applying is explicit and
+Library Undo restores the previous assignments.
+
+**Save current style** keeps the displayed LUT, creative contrast/saturation and
+an approved example. Select that named style in another project to try it on new
+shots. It does not copy the example shot's exposure or white balance. **Export
+saved looks** downloads full-resolution reference PNGs, per-shot adjusted CUBEs,
+a recipe and instructions. Check the result in your editor; editor-specific
+reproduction remains **[Unverified]**.
+
+Press **Space** or the viewer's Play icon for a silent loop of up to six seconds
+around a pinned still. Older scenes create it once, while their original is
+available. New captures offer a checked **Save a short moving preview** option. **Escape**
+returns to the pinned still. Scrub or pause the loop, change looks, or save
+another full-resolution still from the original. Thumbnails always stay still.
+The scopes follow the moving frames while motion is active.
+
+Saved motion works without its original. New full-resolution captures still need
+the original. These compressed companions are at most 1280 pixels wide and
+12 MiB each; they accompany the saved still in project exports and backups.
+They do not replace or copy the whole original video. Clearing generated previews
+keeps these saved companions. Compression can change colour slightly: use the
+full-resolution still for approval. See [workflow and measured limits](docs/SHOOT-MOTION.md).
 
 ## What has been verified
 

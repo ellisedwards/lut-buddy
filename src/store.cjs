@@ -25,8 +25,8 @@ class Store {
     store = new Store(root,db,SQL);store.releaseLock=release;store.lockPath=lockPath;store.lockIdentity=fs.statSync(lockPath);
     db.run('PRAGMA foreign_keys=ON;');
     const version = db.exec('PRAGMA user_version')[0].values[0][0];
-    if (version > 7) throw new Error('This library needs a newer version of LUT Library.');
-    if(version>0&&version<7)store.backup();
+    if (version > 8) throw new Error('This library needs a newer version of LUT Library.');
+    if(version>0&&version<8)store.backup();
     if (version === 0) store.change(() => {
       db.run(`CREATE TABLE projects(id TEXT PRIMARY KEY,name TEXT NOT NULL);
         CREATE TABLE clips(id TEXT PRIMARY KEY,project_id TEXT NOT NULL REFERENCES projects(id),name TEXT NOT NULL,source TEXT NOT NULL,profile TEXT NOT NULL,metadata TEXT NOT NULL);
@@ -46,6 +46,7 @@ class Store {
     if(version<5)store.change(()=>{require('./scene-order.cjs').seedDemoCollections(store);db.run('PRAGMA user_version=5;');});
     if(version<6)store.change(()=>db.run(`CREATE TABLE collection_orders(project_id TEXT NOT NULL REFERENCES projects(id),collection_id TEXT PRIMARY KEY REFERENCES collections(id),position INTEGER NOT NULL); PRAGMA user_version=6;`));
     if(version<7)store.change(()=>db.run(`CREATE TABLE edit_history(id INTEGER PRIMARY KEY AUTOINCREMENT,label TEXT NOT NULL,patch TEXT NOT NULL,undone INTEGER NOT NULL DEFAULT 0); PRAGMA user_version=7;`));
+    if(version<8)store.change(()=>db.run(`CREATE TABLE IF NOT EXISTS styles(id TEXT PRIMARY KEY,name TEXT NOT NULL,lut_id TEXT REFERENCES luts(id),family TEXT NOT NULL,details TEXT NOT NULL); PRAGMA user_version=8;`));
     for (const directory of ['frames','luts','cache','staging','backups','clips','gallery']) fs.mkdirSync(path.join(root,directory),{recursive:true});
     const integrity = db.exec('PRAGMA integrity_check')[0].values[0][0];
     if (integrity !== 'ok') throw new Error('Library integrity check failed. Preserve this library and restore a backup.');
@@ -67,7 +68,7 @@ class Store {
     catch(error) { this.db.close(); this.db=new this.SQL.Database(before); this.db.run('PRAGMA foreign_keys=ON'); throw error; }
   }
   state() {
-    return {projects:this.query('SELECT * FROM projects ORDER BY rowid'), clips:this.query('SELECT id,project_id,name,source,profile FROM clips ORDER BY rowid'), scenes:this.query('SELECT * FROM scenes WHERE deleted=0 ORDER BY rowid DESC'), collections:this.query('SELECT c.* FROM collections c LEFT JOIN collection_orders o ON c.id=o.collection_id ORDER BY c.project_id,o.position IS NULL,o.position,c.rowid'), memberships:this.query('SELECT * FROM memberships'), sceneOrders:this.query('SELECT * FROM scene_orders ORDER BY position'), luts:this.query('SELECT * FROM luts ORDER BY position IS NULL, position, rowid')};
+    return {styles:this.query('SELECT * FROM styles ORDER BY rowid DESC'),projects:this.query('SELECT * FROM projects ORDER BY rowid'), clips:this.query('SELECT id,project_id,name,source,profile FROM clips ORDER BY rowid'), scenes:this.query('SELECT * FROM scenes WHERE deleted=0 ORDER BY rowid DESC'), collections:this.query('SELECT c.* FROM collections c LEFT JOIN collection_orders o ON c.id=o.collection_id ORDER BY c.project_id,o.position IS NULL,o.position,c.rowid'), memberships:this.query('SELECT * FROM memberships'), sceneOrders:this.query('SELECT * FROM scene_orders ORDER BY position'), luts:this.query('SELECT * FROM luts ORDER BY position IS NULL, position, rowid')};
   }
   backup() { const target=path.join(this.root,'backups',`${Date.now()}-${randomUUID()}.sqlite`); atomicWrite(target,this.db.export()); return target; }
 }

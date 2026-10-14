@@ -74,12 +74,22 @@ window.LUTPreviewRenderer = class {
  cancel(){this.version++;}
  async render(scene,record,adjustments){
   const version=++this.version;const [source,lut]=await Promise.all([this.source(scene),this.lut(record)]);if(version!==this.version)return false;
-  const width=scene.preview_width||1280,height=scene.preview_height||720;this.canvas.width=width;this.canvas.height=height;const gl=this.gl;gl.useProgram(this.program);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,source);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_3D,lut.texture);
+  this.drawTexture(source,lut,scene,adjustments,record);
+  while(this.sources.size>2){const key=this.sources.keys().next().value,p=this.sources.get(key);this.sources.delete(key);this.rgbFrames.delete(key);p.then(texture=>this.gl.deleteTexture(texture));}
+  return true;
+ }
+ drawTexture(source,lut,scene,adjustments,record){
+  const width=scene.preview_width||1280,height=scene.preview_height||720;if(this.canvas.width!==width)this.canvas.width=width;if(this.canvas.height!==height)this.canvas.height=height;const gl=this.gl;gl.useProgram(this.program);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,source);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_3D,lut.texture);
   gl.uniform3fv(this.uniforms.domainMin,lut.lo);gl.uniform3fv(this.uniforms.domainMax,lut.hi);gl.uniform1i(this.uniforms.cubeSize,lut.size);gl.uniform1i(this.uniforms.useLut,record?1:0);
   const curve=window.LUTSourceCurves.forProfile(scene.profile);if(!curve&&(adjustments.exposure||adjustments.warmth||adjustments.tint))throw Error('Confirm a supported recording profile first.');gl.uniform1i(this.uniforms.sourceCurve,curve?.index??-1);gl.uniform3fv(this.uniforms.balance,window.LUTSourceCurves.balance(adjustments.warmth,adjustments.tint));
   gl.uniform1f(this.uniforms.exposure,adjustments.exposure);gl.uniform1f(this.uniforms.contrast,adjustments.contrast);gl.uniform1f(this.uniforms.saturation,adjustments.saturation);
   gl.viewport(0,0,width,height);gl.drawArrays(gl.TRIANGLES,0,3);if(gl.getError()!==gl.NO_ERROR)throw new Error('Live preview could not render.');
-  while(this.sources.size>2){const key=this.sources.keys().next().value,p=this.sources.get(key);this.sources.delete(key);this.rgbFrames.delete(key);p.then(texture=>gl.deleteTexture(texture));}
-  return true;
  }
+ async renderMotion(scene,record,adjustments,video){
+  const version=++this.version,lut=await this.lut(record);if(version!==this.version||!video.videoWidth)return false;
+  const gl=this.gl;if(!this.motionTexture){this.motionTexture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,this.motionTexture);this.configure(gl.TEXTURE_2D);}
+  gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.motionTexture);gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL,gl.NONE);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,video);
+  this.drawTexture(this.motionTexture,lut,{...scene,preview_width:video.videoWidth,preview_height:video.videoHeight},adjustments,record);return true;
+ }
+
 };

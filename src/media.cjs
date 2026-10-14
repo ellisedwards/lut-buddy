@@ -163,4 +163,4 @@ async function trimCache(root,budget=512*1024*1024) {
   files.sort((a,b)=>a.mtimeMs-b.mtimeMs);
   for(const file of files) {if(bytes<=budget)break; await fsp.unlink(file.file); bytes-=file.size;}
 }
-module.exports = {run,digest,fingerprint,unchanged,inspect,frame,previewFrame,scrubFrames,scrubAsset,thumbnail,renderLut,renderLutPreview,trimCache,ffmpeg,ffprobe};
+module.exports = {rgbConversion,run,digest,fingerprint,unchanged,inspect,frame,previewFrame,scrubFrames,scrubAsset,thumbnail,renderLut,renderLutPreview,trimCache,ffmpeg,ffprobe};

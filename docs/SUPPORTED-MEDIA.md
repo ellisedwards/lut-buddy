@@ -107,3 +107,18 @@ Per-frame metadata output is bounded. Oversized or unreadable metadata falls bac
 to clip-level metadata with a visible notice; frame settings remain unavailable.
 A matching Sony XML may supersede generic transfer/gamut tags, but conflicting
 recorded Sony RTMD or decoding matrices are rejected.
+
+## Saved motion companions
+
+Optional motion uses the same original-frame identity and explicit decode rules,
+then encodes up to six seconds around the pin as silent H.264 at 24 fps and at
+most 1280 pixels wide. Short originals produce shorter loops; VFR originals are
+resampled for review. A companion is capped at 12 MiB and available disk space is
+checked first. The compressed preview is approximate; full-resolution stills keep
+their original capture quality.
+
+Saved companions travel with scenes in projects/backups and play offline. They
+are saved assets, so clearing generated previews does not remove them. They do
+not contain full original clips. Creating a companion or capturing a new
+full-resolution moment needs the original; an offline companion is not a
+replacement source for full-resolution capture.

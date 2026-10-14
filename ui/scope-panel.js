@@ -6,7 +6,7 @@
  const scopeMode=()=>modes[modeIndex][0];
  const isLight=()=>document.documentElement.dataset.theme==='light';
  const colours=['#ff7979','#70db9d','#87b4ff'];
- function scopeView(){const v=window.LUTProduct.getView(),surface=window.LUTInspection?.getScopeSurface();return v&&surface?{...v,surface}:v;}
+ function scopeView(){const v=window.LUTProduct.motion?.currentView()||window.LUTProduct.getView(),surface=window.LUTInspection?.getScopeSurface();return v&&surface?{...v,surface}:v;}
  function grid(w,h){ctx.strokeStyle=isLight()?'#00000028':'#ffffff28';ctx.lineWidth=1;ctx.font='11px -apple-system, sans-serif';ctx.fillStyle=isLight()?'#575d66':'#bec4cc';for(const f of [0,.25,.5,.75,1]){const y=12+(1-f)*(h-24);ctx.beginPath();ctx.moveTo(28,y);ctx.lineTo(w-8,y);ctx.stroke();ctx.fillText(String(Math.round(f*100)),1,y+4);}}
  function trace(counts,colour,w,h,left=3,right=w-3,peak=Math.max(1,...counts)){ctx.beginPath();counts.forEach((n,i)=>{const x=left+i/(counts.length-1)*(right-left),y=h-4-Math.sqrt(n/peak)*(h-8);if(i)ctx.lineTo(x,y);else ctx.moveTo(x,y);});ctx.strokeStyle=colour;ctx.lineWidth=1.7;ctx.stroke();}
  function density(counts,cols,rows,x,y,w,h,colour){let peak=1;for(const n of counts)peak=Math.max(peak,n);const layer=document.createElement('canvas');layer.width=cols;layer.height=rows;const c=layer.getContext('2d'),image=c.createImageData(cols,rows),rgb=colour.match(/[a-f\d]{2}/gi).map(v=>parseInt(v,16));for(let i=0;i<counts.length;i++)if(counts[i]){const k=i*4;image.data[k]=rgb[0];image.data[k+1]=rgb[1];image.data[k+2]=rgb[2];image.data[k+3]=Math.round(255*(.3+.7*Math.sqrt(counts[i]/peak)));}c.putImageData(image,0,0);ctx.drawImage(layer,x,y,w,h);}
@@ -42,7 +42,14 @@
   const surface=current.surface,width=surface.naturalWidth||surface.width,height=surface.naturalHeight||surface.height,c=document.createElement('canvas');c.width=width;c.height=height;const cc=c.getContext('2d',{willReadFrequently:true});cc.drawImage(surface,0,0,width,height);
   const image=cc.getImageData(0,0,width,height),stats=window.LUTScopes.clipping(image.data,{low:Number($('clip-low').value)*2.55,high:Number($('clip-high').value)*2.55,shadows:$('clip-shadows').checked,highlights:$('clip-highlights').checked,mask:true});image.data.set(stats.overlay);mask.width=width;mask.height=height;mask.getContext('2d').putImageData(image,0,0);mask.hidden=false;window.LUTInspection?.setMask(mask);
  }
+ function updateMotion(view){
+  if(panel.hidden&&!$('clip-shadows').checked&&!$('clip-highlights').checked)return;
+  version++;clearTimeout(timer);current=view;sample.width=384;sample.height=Math.max(1,Math.round(view.surface.height*384/view.surface.width));sampleCtx.drawImage(view.surface,0,0,sample.width,sample.height);lastPixels=sampleCtx.getImageData(0,0,sample.width,sample.height);original=null;
+  if(scopeMode()==='histogram'&&view.originalSurface){sampleCtx.drawImage(view.originalSurface,0,0,sample.width,sample.height);original=window.LUTScopes.histogram(sampleCtx.getImageData(0,0,sample.width,sample.height).data);}
+  draw();$('scope-error').hidden=true;$('levels-status').textContent='Scopes follow the moving preview';
+ }
  async function update(view){
+  if(view?.moving){updateMotion(view);return;}
   current=view;clearTimeout(timer);const job=++version;if(!view?.scene)return;
   if(!panel.hidden||$('clip-shadows').checked||$('clip-highlights').checked)timer=setTimeout(async()=>{
    let pixels;
@@ -60,6 +67,6 @@
  $('scope-prev').addEventListener('click',()=>stepMode(-1));$('scope-next').addEventListener('click',()=>stepMode(1));
  $('scope-skin').addEventListener('change',()=>draw());
  for(const id of ['clip-shadows','clip-highlights','clip-low','clip-high'])$(id).addEventListener('change',()=>{try{draw();}catch(error){$('clipping-mask').hidden=true;window.LUTInspection?.setMask(null);$('scope-clipping').textContent=error.message;$('levels-status').textContent=error.message;}});
- window.LUTScopePanel={update,step:stepMode,redraw:draw,invalidate(){version++;clearTimeout(timer);$('clipping-mask').hidden=true;window.LUTInspection?.setMask(null);},position(){},hideMask(){ $('clipping-mask').hidden=true;}};
+ window.LUTScopePanel={update,updateMotion,step:stepMode,redraw:draw,invalidate(){version++;clearTimeout(timer);$('clipping-mask').hidden=true;window.LUTInspection?.setMask(null);},position(){},hideMask(){ $('clipping-mask').hidden=true;}};
  window.LUTScopePanel.update(window.LUTProduct.getView());
 })();

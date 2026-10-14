@@ -1,12 +1,28 @@
 # LUT Library developer handoff
 
-Updated 2026-10-13. This is a Mac-first, single-user local web project with an MIT
+Updated 2026-10-14. This is a Mac-first, single-user local web project with an MIT
 licence. Keep the existing viewer as the base experience; do not redesign it.
 
 ## Current delivery
 
+[Shoot review and motion](SHOOT-MOTION.md) adds an optional scene grid, explicit
+look-family assignment, creative-only saved styles with approved examples, and
+reference/CUBE/recipe handoff ZIPs. Shot exposure, balance and bypass are kept.
+Assignments and styles participate in existing persistent Undo. Schema 8 adds
+styles, backing up older databases before migration. Project archives remain
+backward-compatible with the existing version 1 format.
+
+Space or Play uses a saved six-second maximum silent H.264 companion; Escape
+restores the pinned still. The same GPU look math renders stills and video.
+Scopes sample the current moving source/output together. Moving companions live
+under frames, survive disconnected originals and travel with projects/backups.
+Full-resolution captures still decode the original. New captures from motion
+inherit their parent shot's corrections and the displayed look. Normal still
+navigation does not prepare motion or start full-resolution processing.
+
+
 The Reference look selector is in **Library → LUTs**; the main Compare button
-and Space shortcut retain their behavior. The floating Selected LUT badge is
+and **V** shortcut toggle reference comparison; **Space** now plays/pauses motion. The floating Selected LUT badge is
 removed. Searches/dropdowns inherit their surrounding surface in both themes, and
 light-mode thumbnail captions use white bands (slightly warm for converted copies). Scene,
 scope titles and active filters use weight 700; buttons and other labels use 500.
@@ -51,7 +67,7 @@ the new full-resolution worker. Preserve this boundary.
 
 Local synthetic/browser checks cover these tools, independent colour swatches,
 actual downloads, narrow-screen layout and cancellation during inspection.
-The automated suite has 99 tests. Recheck the exact runtime/commit before claims.
+The automated suite has 102 tests. Recheck the exact runtime/commit before claims.
 
 Converted LUT thumbnails use a subtle orange-black abbreviation band in dark
 mode and a warm white band in light mode. The **Converted from** readout below

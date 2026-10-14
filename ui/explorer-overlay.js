@@ -14,13 +14,14 @@ const byName = new Map(records.map(r => [r.name,r]));
 const $ = id => document.getElementById(id);
 const tiles = $('tiles'), rail = $('rail'), preview = $('preview');
 const preferenceKey = 'lut-explorer-project-'+productBoot.projectId;
-let state = {scene:'studio_wide',sceneCollection:'',sceneDevice:'',selectedLook:'',referenceLook:'',selected:'SONY_REF_LC709A.cube',reference:'',comparing:false,favourites:[],favouritesOnly:false,adjustments:{},theme:'dark',cameraInfo:false,histogram:false,stripVisible:true,lutOrder:records.map(r=>r.id)};
+let state = {scene:'studio_wide',sceneCollection:'',sceneDevice:'',selectedLook:'',referenceLook:'',selected:'SONY_REF_LC709A.cube',reference:'',comparing:false,favourites:[],favouritesOnly:false,adjustments:{},sceneLooks:{},theme:'dark',cameraInfo:false,histogram:false,stripVisible:true,lutOrder:records.map(r=>r.id)};
 function cleanAdjustments(value={}) {
  const number=(key,fallback,min,max)=>typeof value[key]==='number'&&Number.isFinite(value[key])?Math.max(min,Math.min(max,value[key])):fallback;
  return {warmth:number('warmth',0,-100,100),tint:number('tint',0,-100,100),exposure:number('exposure',0,-2,2),contrast:number('contrast',1,.5,1.5),saturation:number('saturation',1,0,1.5),enabled:typeof value.enabled==='boolean'?value.enabled:true};
 }
 function restorePreferences(saved) {
  if(!saved||typeof saved!=='object')return;
+ if(saved.sceneLooks&&typeof saved.sceneLooks==='object'&&!Array.isArray(saved.sceneLooks))state.sceneLooks={...saved.sceneLooks};
  if(Array.isArray(saved.lutOrder))state.lutOrder=saved.lutOrder;
  if(typeof saved.stripVisible==='boolean')state.stripVisible=saved.stripVisible;
  if(typeof saved.cameraInfo==='boolean')state.cameraInfo=saved.cameraInfo;
@@ -216,7 +217,7 @@ function updateControls() {
  $('stage').setAttribute('aria-pressed',String(state.comparing));
  $('toggle').setAttribute('aria-pressed',String(state.comparing));
  $('toggle').textContent=state.comparing?'Back':'Compare';
- $('toggle').title=(state.comparing?'Return to selected LUT':`Compare with ${label(state.reference)}`)+' (Space)';
+ $('toggle').title=(state.comparing?'Return to selected LUT':`Compare with ${label(state.reference)}`)+' (V)';
  $('stage').setAttribute('aria-label',state.comparing?`Return to ${label(state.selected)}`:`Compare with ${label(state.reference)}`);
  updateFavourites();
  updateAdjustmentControls();updateStrip();updateCameraInfo();
@@ -225,6 +226,8 @@ function updateControls() {
 async function render({persist=true}={}) {
  if(!scenes.length){preview.hidden=true;preview.removeAttribute('src');$('live-preview').hidden=true;$('filename').textContent='Your footage, your looks';$('look-detail').textContent='Open Library to import a clip and mark your scenes.';$('empty-library').hidden=false;return;}
  $('empty-library').hidden=true;
+ const assigned=state.sceneLooks?.[state.scene];if(assigned!==undefined){state.selected=records.find(r=>lookNavigation.family(r)===assigned&&canUseLut(r.name))?.name||'';state.selectedLook=assigned;}
+ document.dispatchEvent(new CustomEvent('lut-render-start',{detail:{sceneId:state.scene}}));
  const version=++renderVersion;liveRenderer?.cancel();globalThis.LUTInspection?.invalidate();invalidateLevels();
  updateControls();if(persist)save();
  const name=state.comparing?state.reference:state.selected, scene=state.scene, comparing=state.comparing;
@@ -249,7 +252,7 @@ async function render({persist=true}={}) {
   // Publish only the finished preview. Keep the previous surface during loading.
   preview.src=path;preview.alt=`${byScene.get(scene).label} · ${label(name)}`;
   $('live-preview').hidden=!adjusted;preview.hidden=adjusted;
-  displayedLevelsVersion=version;updateLevels();globalThis.LUTInspection?.update(globalThis.LUTProduct.getView());
+  displayedLevelsVersion=version;document.dispatchEvent(new CustomEvent('lut-render-ready'));updateLevels();globalThis.LUTInspection?.update(globalThis.LUTProduct.getView());
   // Finish the selected preview (including saved adjustments) before starting
   // background image requests, so they cannot delay its raw-frame download.
   if(thumbnailScene!==scene||allTiles.some(tile=>!tile.hidden&&(tile.classList.contains('preview-failed')||tile.querySelector('img').getAttribute('src')!==imagePath(tile.dataset.name,scene))))refreshSceneAssets();
@@ -260,7 +263,7 @@ async function render({persist=true}={}) {
 function select(name,{reveal=false}={}) {
  if ((!byName.has(name) && name!=='') || !canUseLut(name)) return;
  if (state.selected===name && !state.comparing&&!allTiles.some(tile=>tile.dataset.name===name&&tile.classList.contains('preview-failed'))) return;
- state.selected=name;state.selectedLook=byName.has(name)?lookNavigation.family(byName.get(name)):'';state.comparing=false;render();
+ state.selected=name;if(Object.hasOwn(state.sceneLooks,state.scene))state.sceneLooks[state.scene]=byName.has(name)?lookNavigation.family(byName.get(name)):'';state.selectedLook=byName.has(name)?lookNavigation.family(byName.get(name)):'';state.comparing=false;render();
  if (reveal && name) allTiles.find(tile=>tile.dataset.name===name).scrollIntoView({block:'nearest',inline:'nearest'});
 }
 function compare() { if(globalThis.LUTInspection?.hasComparison())globalThis.LUTInspection.setCompareMode('toggle');state.comparing=!state.comparing;render(); }
@@ -311,7 +314,7 @@ function filterFavourites(only) {
 $('filter-all').addEventListener('click',()=>filterFavourites(false));
 $('filter-favourites').addEventListener('click',()=>filterFavourites(true));
 $('scene').addEventListener('change',event=>{
- state.scene=event.target.value;
+ state.scene=event.target.value;const assigned=state.sceneLooks[state.scene];if(assigned!==undefined){state.selected=records.find(r=>lookNavigation.family(r)===assigned&&canUseLut(r.name))?.name||'';state.selectedLook=assigned;}
  render();
 });
 allTiles.forEach(tile=>tile.addEventListener('click',()=>{if(!lutReorderMode)select(tile.dataset.name);}));
@@ -414,7 +417,7 @@ window.addEventListener('keydown',event=>{
   const names=visibleNames(),index=names.indexOf(state.selected);
   const next=event.key==='Home'?0:event.key==='End'?names.length-1:Math.max(0,Math.min(names.length-1,index+(event.key==='ArrowRight'?1:-1)));
   select(names[next],{reveal:true});
- } else if(event.code==='Space' && (!event.target.matches('button') || event.target.classList.contains('tile'))) { event.preventDefault();compare(); }
+ } else if(event.key.toLowerCase()==='v'){event.preventDefault();if(!event.repeat)compare();} else if(event.code==='Space' && (!event.target.matches('button') || event.target.classList.contains('tile') || event.target.id==='stage')) { event.preventDefault();if(!event.repeat)window.LUTProduct.motion?.toggle().catch(error=>$('motion-status').textContent=error.message); }
 });
 $('viewer').append($('about-dialog'));
 $('about').addEventListener('click',()=>$('about-dialog').showModal());
@@ -492,6 +495,7 @@ function mergeSettings(base,local,remote){
  const oldFav=new Set(base?.favourites||[]),newFav=new Set(local.favourites),remoteFav=new Set(remote.favourites||[]);
  for(const name of newFav)if(!oldFav.has(name))remoteFav.add(name);
  for(const name of oldFav)if(!newFav.has(name))remoteFav.delete(name);
+ result.sceneLooks={...(remote.sceneLooks||{})};for(const [id,value]of Object.entries(local.sceneLooks||{}))if(value!==base?.sceneLooks?.[id])result.sceneLooks[id]=value;
  result.favourites=[...remoteFav];result.adjustments=result.adjustments||{};
  for(const [id,a] of Object.entries(local.adjustments||{}))if(JSON.stringify(a)!==JSON.stringify(base?.adjustments?.[id]))result.adjustments[id]=a;
  for(const key of ['scene','sceneCollection','sceneDevice','selectedLook','referenceLook','selected','reference','favouritesOnly','theme','cameraInfo','histogram','stripVisible','lutOrder'])if(local[key]!==base?.[key])result[key]=local[key];
@@ -588,7 +592,7 @@ function originalLevels(scene){
  return originalLevelCache.get(key);
 }
 function updateLevels(){
- if(globalThis.LUTScopePanel){positionLevels();if(displayedLevelsVersion===renderVersion)globalThis.LUTScopePanel.update(globalThis.LUTProduct.getView());return;}
+ if(globalThis.LUTScopePanel){positionLevels();if(displayedLevelsVersion===renderVersion)globalThis.LUTScopePanel.update(globalThis.LUTProduct.motion?.currentView()||globalThis.LUTProduct.getView());return;}
  const job=++levelsJob;clearTimeout(levelsTimer);positionLevels();
  if($('levels').hidden||displayedLevelsVersion!==renderVersion)return;
  const scene=state.scene,name=state.comparing?state.reference:state.selected,version=renderVersion;
@@ -608,6 +612,8 @@ function updateLevels(){
 }
 Object.assign(window.LUTProduct,{
  getView:()=>!scenes.length||displayedLevelsVersion!==renderVersion?null:({scene:byScene.get(state.scene),record:byName.get(state.comparing?state.reference:state.selected),selected:byName.get(state.selected),reference:byName.get(state.reference),adjustments:{...sceneAdjustments()},comparing:state.comparing,surface:preview.hidden?$('live-preview'):preview,version:renderVersion}),
+ adoptSettings:incoming=>{restorePreferences(incoming.state||incoming);projectRevision=incoming.revision??projectRevision;lastSharedState=JSON.parse(JSON.stringify(incoming.state||incoming));pendingPrefs=null;clearTimeout(projectTimer);const family=state.sceneLooks?.[state.scene];if(family!==undefined){state.selected=records.find(r=>lookNavigation.family(r)===family&&canUseLut(r.name))?.name||'';state.selectedLook=family;}render({persist:false});},
+ getScenes:()=>scenes,getRecords:()=>records,
  getImage:(name,scene)=>loadImage(imagePath(name,scene)),hasAdjustments:hasAdjustment,positionScopes:positionLevels,
  hideAdjustments:()=>showAdjustmentPanel(false),
  resetCompare:()=>{if(state.comparing){state.comparing=false;render();}}
