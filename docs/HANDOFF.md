@@ -32,9 +32,9 @@ Saved scene previews and full-resolution exports work after a linked source goes
 missing. Existing video copies, backups and older project archives are preserved;
 this change does not delete or migrate them. Library labels these as stored copies.
 
-The app is now **LUT Library**, with the owner's updated larger-circle artwork
-beside the name and as the favicon. The icon preserves its proportions and matches
-the text's capital-letter height. The name uses white text in dark mode and dark
+The app is now **LUT Library**, with the owner's original square colour icon
+beside the name and as the favicon, restored at its previous 21.6px size.
+The name uses white text in dark mode and dark
 text in light mode. Light mode uses a white outer background and a
 72% white glass layer for floating panels and viewer buttons. Theme changes
 redraw the cached scope with the matching line colours, without reloading media.
