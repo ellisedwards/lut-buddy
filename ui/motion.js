@@ -10,6 +10,7 @@
  function cancelFrame(){if(video.cancelVideoFrameCallback&&callback)video.cancelVideoFrameCallback(callback);cancelAnimationFrame(callback);callback=null;}
  function stop(){following=false;task++;preparing=false;controller?.abort();video.pause();cancelFrame();active=false;renderer?.cancel();canvas.hidden=true;$('motion-status').textContent='';controls();if(view)window.LUTScopePanel?.update(view);}
  function pauseForSceneChange(){task++;preparing=false;controller?.abort();video.pause();cancelFrame();active=false;renderer?.cancel();canvas.hidden=true;motion=null;}
+ function waitForNextMovingScene(){video.pause();cancelFrame();active=false;renderer?.cancel();canvas.hidden=true;motion=null;$('motion-status').textContent='';controls();if(view)window.LUTScopePanel?.update(view);}
  async function start(current){
   if(!current?.scene)return;view=current;window.LUTInspection?.enterMotion();const version=++task;controller?.abort();controller=new AbortController();const signal=controller.signal;preparing=true;$('motion-play').disabled=true;
   try{
@@ -17,7 +18,7 @@
    if(version!==task)return;video.src='assets/'+motion.asset;await new Promise((resolve,reject)=>{const timeout=setTimeout(()=>finish(Error('Saved moving preview took too long to load.')),15000),abort=()=>finish(Object.assign(Error('Cancelled'),{name:'AbortError'})),finish=error=>{clearTimeout(timeout);signal.removeEventListener('abort',abort);video.onloadeddata=null;video.onerror=null;error?reject(error):resolve();};signal.addEventListener('abort',abort,{once:true});video.onloadeddata=()=>finish();video.onerror=()=>finish(Error('Saved moving preview could not play.'));video.load();});if(version!==task)return;
    active=true;video.currentTime=Math.min(motion.pinOffset,Math.max(0,motion.duration-.05));await new Promise((resolve,reject)=>{if(!video.seeking){resolve();return;}const finish=error=>{clearTimeout(timeout);video.removeEventListener('seeked',seeked);signal.removeEventListener('abort',abort);error?reject(error):resolve();},seeked=()=>finish(),abort=()=>finish(Object.assign(Error('Cancelled'),{name:'AbortError'})),timeout=setTimeout(()=>finish(Error('Moving preview could not seek to the pinned frame.')),10000);video.addEventListener('seeked',seeked,{once:true});signal.addEventListener('abort',abort,{once:true});if(signal.aborted)abort();});if(version!==task)return;
    await draw();await video.play();schedule();$('motion-status').textContent='';controls();
-  }catch(e){if(version===task&&e.name!=='AbortError'){stop();$('motion-status').textContent=e.message;}}finally{if(version===task)preparing=false;$('motion-play').disabled=false;}
+  }catch(e){if(version===task&&e.name!=='AbortError'){if(following)waitForNextMovingScene();else{stop();$('motion-status').textContent=e.message;}}}finally{if(version===task)preparing=false;$('motion-play').disabled=false;}
  }
  async function toggle(){
   if(active){if(video.paused){following=true;await video.play();schedule();}else{following=false;video.pause();cancelFrame();await draw();window.LUTScopePanel?.update({...view,surface:canvas});}controls();return;}
