@@ -86,13 +86,44 @@ async function startServer({root=process.env.LUT_EXPLORER_DATA||path.join(os.hom
   inspectionQueue=task.catch(()=>{});return task;
  });}
  const motion=require('./motion.cjs'),shoot=require('./shoot.cjs');
+ // Older libraries may already know an exact saved timestamp while retaining
+ // only the lightweight legacy clip record.  When its linked original is
+ // available again, verify that file and restore its timing index before
+ // making a disposable moving preview.  The saved still itself is untouched.
+ async function motionClip(row,signal){
+  let source=clip(row.clip_id),previous=JSON.parse(source.metadata);
+  if(!previous.legacy)return {row,source};
+  if(!previous.sha256)throw Error('This saved scene has no original clip identity to verify.');
+  progress=`Checking linked original · ${source.name}…`;
+  const restored=await media.inspect(source.source,signal,text=>{progress=`${source.name} · ${text}`;});
+  if(restored.sha256!==previous.sha256)throw Error('The linked file does not match the original clip used for this saved scene.');
+  const scenes=store.query('SELECT id,frame_index,pts,time_base FROM scenes WHERE clip_id=? AND deleted=0',[source.id]);
+  const timeBase=restored.stream.time_base,frameTimes=restored.pts.map(pts=>seconds(pts,timeBase));
+  const indices=scenes.map(value=>{
+   const target=seconds(value.pts,value.time_base);let index=0;
+   for(let n=1;n<frameTimes.length;n++)if(Math.abs(frameTimes[n]-target)<Math.abs(frameTimes[index]-target))index=n;
+   const before=frameTimes[Math.max(0,index-1)],after=frameTimes[Math.min(frameTimes.length-1,index+1)];
+   // The previous library stored Sony timing in microseconds.  Its restored
+   // source can use a different container time base, so compare time rather
+   // than the raw integer while still requiring the nearest exact frame.
+   const tolerance=Math.max(0.001,Math.min(Math.abs(frameTimes[index]-before)||Infinity,Math.abs(after-frameTimes[index])||Infinity)/2);
+   return {id:value.id,index,delta:Math.abs(frameTimes[index]-target),tolerance};
+  });
+  if(indices.some(value=>value.delta>value.tolerance))throw Error('The linked original does not contain every saved scene timestamp.');
+  restored.linked=true;
+  store.record('Restore linked source timing',()=>store.change(()=>{
+   store.db.run('UPDATE clips SET metadata=? WHERE id=?',[JSON.stringify(restored),source.id]);
+   for(const value of indices)store.db.run('UPDATE scenes SET frame_index=? WHERE id=?',[value.index,value.id]);
+  }),row.project_id);
+  return {row:scene(row.id),source:clip(row.clip_id)};
+ }
  const methods={
   shootState:({projectId})=>({library:snapshot(projectId),preferences:settings(projectId)}),
   applyShoot:payload=>shoot.apply(store,payload,settings,saveSettings),
   saveStyle:payload=>job(signal=>shoot.saveStyle(store,payload,queuedInspection,signal)),
   deleteStyle:({id,projectId})=>{store.one('SELECT id FROM styles WHERE id=?',[id]);store.record('Remove saved style',()=>store.change(()=>store.db.run('DELETE FROM styles WHERE id=?',[id])),projectId);return snapshot(projectId);},
   exportHandoff:payload=>job(async signal=>{const id=randomUUID(),file=path.join(root,'staging',id+'.zip');await shoot.handoff(store,payload,file,queuedInspection,signal,text=>progress=text);downloads.set(id,{file,filename:'LUT-Library-Handoff.zip',at:Date.now()});return {url:'export/look/'+id,name:'LUT-Library-Handoff.zip'};}),
-  prepareMotion:({sceneId,projectId})=>job(async signal=>{const row=scene(sceneId);if(row.project_id!==projectId)throw Error('Scene belongs to another project.');const previous=JSON.parse(row.details);if(previous.motion&&fs.existsSync(asset(previous.motion.asset)))return previous.motion;const relative='frames/'+randomUUID()+'-motion.mp4';progress='Saving a short moving preview…';try{const value={...await motion.prepare(clip(row.clip_id),row.frame_index,asset(relative),signal),asset:relative};signal.throwIfAborted();const current=scene(sceneId);if(current.sha256!==row.sha256)throw Error('Scene changed while preparing motion.');store.record('Add moving preview',()=>store.change(()=>store.db.run('UPDATE scenes SET details=? WHERE id=?',[JSON.stringify({...JSON.parse(current.details),motion:value}),row.id])),projectId);return value;}catch(error){await fsp.unlink(asset(relative)).catch(()=>{});throw error;}}),
+  prepareMotion:({sceneId,projectId})=>job(async signal=>{let row=scene(sceneId);if(row.project_id!==projectId)throw Error('Scene belongs to another project.');let previous=JSON.parse(row.details);if(previous.motion&&fs.existsSync(asset(previous.motion.asset)))return previous.motion;({row}=await motionClip(row,signal));previous=JSON.parse(row.details);const relative='frames/'+randomUUID()+'-motion.mp4';progress='Saving a short moving preview…';try{const value={...await motion.prepare(clip(row.clip_id),row.frame_index,asset(relative),signal),asset:relative};signal.throwIfAborted();const current=scene(sceneId);if(current.sha256!==row.sha256)throw Error('Scene changed while preparing motion.');store.record('Add moving preview',()=>store.change(()=>store.db.run('UPDATE scenes SET details=? WHERE id=?',[JSON.stringify({...JSON.parse(current.details),motion:value}),row.id])),projectId);return value;}catch(error){await fsp.unlink(asset(relative)).catch(()=>{});throw error;}}),
   motionCapture:({sceneId,projectId,time,name:label,lutId=''})=>{const row=scene(sceneId);if(row.project_id!==projectId)throw Error('Scene belongs to another project.');const index=motion.captureIndex(clip(row.clip_id),JSON.parse(row.details).motion,time);const lut=lutId?store.one('SELECT * FROM luts WHERE id=?',[lutId]):null;if(lut&&!compatible(clip(row.clip_id).profile,lut).ok)throw Error('Choose a compatible look before capturing.');return methods.capture({clipId:row.clip_id,indices:[index],names:[label],motion:false,inheritSceneId:sceneId,inheritFamily:lut?require('../ui/look-navigation.js').family(lut):''});},
   inspectStill:(payload,signal)=>queuedInspection(payload,signal),
   exportLook:payload=>job(async signal=>{
