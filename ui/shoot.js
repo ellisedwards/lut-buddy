@@ -16,7 +16,9 @@
  function icon(path,label){const button=node('button','pane-icon');button.type='button';button.title=label;button.setAttribute('aria-label',label);const svg=document.createElementNS('http://www.w3.org/2000/svg','svg'),p=document.createElementNS(svg.namespaceURI,'path');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('aria-hidden','true');p.setAttribute('d',path);svg.append(p);button.append(svg);return button;}
  function remember(){try{localStorage.setItem(storageKey,JSON.stringify(model.snapshot()));}catch{}buttons();}
  function closeMenus(){$('split-menu').hidden=true;$('pane-menu').hidden=true;$('split-menu-open').setAttribute('aria-expanded','false');}
- function copy(canvas,surface){const w=surface.videoWidth||surface.naturalWidth||surface.width,h=surface.videoHeight||surface.naturalHeight||surface.height;if(!w||!h)return;canvas.width=Math.min(640,w);canvas.height=Math.max(1,Math.round(h*canvas.width/w));canvas.getContext('2d').drawImage(surface,0,0,canvas.width,canvas.height);}
+ // Preserve preview detail when a frame becomes inactive; scaling down here
+ // made it visibly softer than the same frame in the active viewer.
+ function copy(canvas,surface){const w=surface.videoWidth||surface.naturalWidth||surface.width,h=surface.videoHeight||surface.naturalHeight||surface.height;if(!w||!h)return;canvas.width=w;canvas.height=h;canvas.getContext('2d').drawImage(surface,0,0,w,h);}
  function snapshotActive(){const v=product.getView(),cell=v&&cells.get(v.scene.id);if(cell)try{copy(cell.canvas,product.motion?.currentView()?.surface||v.surface);}catch{}}
  function makeCell(id){
   const scene=sceneMap.get(id),pane=node('article','frame-pane');pane.dataset.scene=id;pane.setAttribute('role','group');pane.setAttribute('aria-label',scene.label);
