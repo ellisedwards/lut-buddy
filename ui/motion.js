@@ -1,17 +1,17 @@
 'use strict';
 (()=>{
  const $=id=>document.getElementById(id),product=window.LUTProduct,video=document.createElement('video'),canvas=$('motion-canvas');video.muted=true;video.loop=true;video.playsInline=true;video.preload='metadata';video.id='motion-video';video.hidden=true;document.body.append(video);
- let renderer,view,motion,active=false,preparing=false,task=0,controller,callback,frameBusy=false,frames=0,lastError='',lastScope=0;
+ let renderer,view,motion,active=false,preparing=false,following=false,task=0,controller,callback,frameBusy=false,frames=0,lastError='',lastScope=0;
  const identity={exposure:0,warmth:0,tint:0,contrast:1,saturation:1,enabled:true};
  async function call(method,payload,signal){const r=await fetch('api/call',{method:'POST',headers:{'Content-Type':'application/json','X-LUT-Token':product.boot.token},body:JSON.stringify({method,payload:{projectId:product.boot.projectId,...payload}}),signal}),d=await r.json();if(!r.ok||!d.ok)throw Error(d.error||'Moving preview unavailable.');return d.data;}
  function controls(){$('motion-icon').setAttribute('d',active&&!video.paused?'M8 5v14M16 5v14':'m8 5 11 7-11 7z');const present=!!motion;$('motion-play').setAttribute('aria-label',active&&!video.paused?'Pause moving scene':'Play moving scene');$('motion-play').title=(present?'Play / pause moving scene':'Save moving preview and play')+' (Space)';$('motion-play').setAttribute('aria-pressed',String(active&&!video.paused));}
  async function draw(){if(!active||!view||video.readyState<2||frameBusy)return;frameBusy=true;try{if(!renderer)renderer=new window.LUTPreviewRenderer(canvas);if(await renderer.renderMotion(view.scene,view.record,view.adjustments.enabled?view.adjustments:identity,video)){if(!active)return;canvas.hidden=false;frames++;canvas.dataset.renderedFrames=String(frames);canvas.dataset.lastFrameAt=String(performance.now());lastError='';if(performance.now()-lastScope>250){lastScope=performance.now();window.LUTScopePanel?.updateMotion({...view,surface:canvas,moving:true,originalSurface:video});}controls();}}catch(e){lastError=e.message;stop();$('motion-status').textContent=e.message;}finally{frameBusy=false;}}
  function schedule(){if(!active||video.paused)return;if(video.requestVideoFrameCallback)callback=video.requestVideoFrameCallback(()=>{draw().finally(schedule);});else callback=requestAnimationFrame(()=>{draw().finally(schedule);});}
  function cancelFrame(){if(video.cancelVideoFrameCallback&&callback)video.cancelVideoFrameCallback(callback);cancelAnimationFrame(callback);callback=null;}
- function stop(){task++;preparing=false;controller?.abort();video.pause();cancelFrame();active=false;renderer?.cancel();canvas.hidden=true;$('motion-status').textContent='';controls();if(view)window.LUTScopePanel?.update(view);}
- async function toggle(){
-  if(active){if(video.paused){await video.play();schedule();}else{video.pause();cancelFrame();await draw();window.LUTScopePanel?.update({...view,surface:canvas});}controls();return;}
-  const current=product.getView();if(!current?.scene)return;view=current;window.LUTInspection?.enterMotion();const version=++task;controller?.abort();controller=new AbortController();const signal=controller.signal;preparing=true;$('motion-play').disabled=true;
+ function stop(){following=false;task++;preparing=false;controller?.abort();video.pause();cancelFrame();active=false;renderer?.cancel();canvas.hidden=true;$('motion-status').textContent='';controls();if(view)window.LUTScopePanel?.update(view);}
+ function pauseForSceneChange(){task++;preparing=false;controller?.abort();video.pause();cancelFrame();active=false;renderer?.cancel();canvas.hidden=true;motion=null;}
+ async function start(current){
+  if(!current?.scene)return;view=current;window.LUTInspection?.enterMotion();const version=++task;controller?.abort();controller=new AbortController();const signal=controller.signal;preparing=true;$('motion-play').disabled=true;
   try{
    motion=view.scene.motion;if(!motion){$('motion-status').textContent='Saving a short moving preview…';motion=await call('prepareMotion',{sceneId:view.scene.id},signal);if(version!==task)return;view.scene.motion=motion;}
    if(version!==task)return;video.src='assets/'+motion.asset;await new Promise((resolve,reject)=>{const timeout=setTimeout(()=>finish(Error('Saved moving preview took too long to load.')),15000),abort=()=>finish(Object.assign(Error('Cancelled'),{name:'AbortError'})),finish=error=>{clearTimeout(timeout);signal.removeEventListener('abort',abort);video.onloadeddata=null;video.onerror=null;error?reject(error):resolve();};signal.addEventListener('abort',abort,{once:true});video.onloadeddata=()=>finish();video.onerror=()=>finish(Error('Saved moving preview could not play.'));video.load();});if(version!==task)return;
@@ -19,10 +19,14 @@
    await draw();await video.play();schedule();$('motion-status').textContent='';controls();
   }catch(e){if(version===task&&e.name!=='AbortError'){stop();$('motion-status').textContent=e.message;}}finally{if(version===task)preparing=false;$('motion-play').disabled=false;}
  }
+ async function toggle(){
+  if(active){if(video.paused){following=true;await video.play();schedule();}else{following=false;video.pause();cancelFrame();await draw();window.LUTScopePanel?.update({...view,surface:canvas});}controls();return;}
+  following=true;await start(product.getView());
+ }
  $('motion-play').addEventListener('click',()=>toggle().catch(e=>$('motion-status').textContent=e.message));video.addEventListener('seeked',()=>{draw();controls();});
  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&(active||preparing)&&!document.querySelector('dialog[open]')){e.preventDefault();e.stopImmediatePropagation();stop();}},true);
- document.addEventListener('lut-render-start',e=>{if(view&&e.detail.sceneId!==view.scene.id){stop();motion=null;view=null;}controls();});
- document.addEventListener('lut-render-ready',()=>{const next=product.getView();if(next){if(view&&view.scene.id!==next.scene.id)stop();view=next;motion=next.scene.motion||motion;if(active)draw();controls();}});
+ document.addEventListener('lut-render-start',e=>{if(view&&e.detail.sceneId!==view.scene.id){if(following)pauseForSceneChange();else{stop();motion=null;view=null;}}controls();});
+ document.addEventListener('lut-render-ready',()=>{const next=product.getView();if(next){if(view&&view.scene.id!==next.scene.id){if(following){start(next).catch(e=>$('motion-status').textContent=e.message);return;}stop();}view=next;motion=next.scene.motion||motion;if(active)draw();controls();}});
  for(const id of ['inspect-open','shoot-open'])$(id)?.addEventListener('click',stop);document.addEventListener('visibilitychange',()=>{if(document.hidden&&active){video.pause();cancelFrame();controls();}});window.addEventListener('resize',controls);
- product.motion={toggle,stop,active:()=>active,currentView:()=>active?{...view,surface:canvas,moving:true,originalSurface:video}:null,diagnostics:()=>({frames,lastError,playing:active&&!video.paused,currentTime:video.currentTime,duration:motion?.duration})};controls();
+ product.motion={toggle,stop,active:()=>active,currentView:()=>active?{...view,surface:canvas,moving:true,originalSurface:video}:null,diagnostics:()=>({frames,lastError,playing:active&&!video.paused,following,currentTime:video.currentTime,duration:motion?.duration})};controls();
 })();
