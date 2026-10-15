@@ -4,7 +4,7 @@ document.documentElement.dataset.focusInput='pointer';
 document.addEventListener('pointerdown',()=>{document.documentElement.dataset.focusInput='pointer';},true);
 document.addEventListener('keydown',event=>{if(!event.metaKey&&!event.ctrlKey&&!event.altKey&&!['Shift','Control','Alt','Meta'].includes(event.key))document.documentElement.dataset.focusInput='keyboard';},true);
 const productBoot=JSON.parse(document.getElementById('product-boot').textContent);
-window.LUTProduct={boot:productBoot,getSelection:()=>({...state}),selectScene:id=>{if(byScene.has(id)){$('scene').value=id;$('scene').dispatchEvent(new Event('change',{bubbles:true}));}},setSceneCollection:id=>{state.sceneCollection=id;save();},setSceneDevice:id=>{state.sceneDevice=id;save();},setSceneNavigation:ids=>{sceneNavigation=ids.filter(id=>byScene.has(id));$('scene').replaceChildren(...sceneNavigation.map(id=>makeOption(id,sceneLabels.get(id))));$('scene').value=state.scene;},getSceneNavigation:()=>[...sceneNavigation],sceneTitle:id=>sceneLabels.get(id),refresh:()=>render(),flush:async()=>{save();while(savingProject||pendingPrefs){await persistProject();await new Promise(r=>setTimeout(r,30));}}};
+window.LUTProduct={boot:productBoot,getSelection:()=>({...state}),selectScene:id=>{if(byScene.has(id)){if(![...$('scene').options].some(o=>o.value===id))$('scene').append(makeOption(id,sceneLabels.get(id)));$('scene').value=id;$('scene').dispatchEvent(new Event('change',{bubbles:true}));}},setSceneCollection:id=>{state.sceneCollection=id;save();},setSceneDevice:id=>{state.sceneDevice=id;save();},setSceneNavigation:ids=>{sceneNavigation=ids.filter(id=>byScene.has(id));$('scene').replaceChildren(...[...new Set([...sceneNavigation,state.scene])].filter(id=>byScene.has(id)).map(id=>makeOption(id,sceneLabels.get(id))));$('scene').value=state.scene;},getSceneNavigation:()=>[...sceneNavigation],sceneTitle:id=>sceneLabels.get(id),refresh:()=>render(),flush:async()=>{save();while(savingProject||pendingPrefs){await persistProject();await new Promise(r=>setTimeout(r,30));}}};
 const scenes = JSON.parse(document.getElementById('scenes-manifest').textContent);
 const byScene = new Map(scenes.map(scene => [scene.id,scene]));
 const records = JSON.parse(document.getElementById('manifest').textContent);
@@ -227,8 +227,10 @@ async function render({persist=true}={}) {
  if(!scenes.length){preview.hidden=true;preview.removeAttribute('src');$('live-preview').hidden=true;$('filename').textContent='Your footage, your looks';$('look-detail').textContent='Open Library to import a clip and mark your scenes.';$('empty-library').hidden=false;return;}
  $('empty-library').hidden=true;
  const assigned=state.sceneLooks?.[state.scene];if(assigned!==undefined){state.selected=records.find(r=>lookNavigation.family(r)===assigned&&canUseLut(r.name))?.name||'';state.selectedLook=assigned;}
+ const shared=window.LUTProduct.split?.previewFamily();if(shared!==undefined){state.selected=records.find(r=>lookNavigation.family(r)===shared&&canUseLut(r.name))?.name||'';state.selectedLook=shared;}
+ const version=++renderVersion;
  document.dispatchEvent(new CustomEvent('lut-render-start',{detail:{sceneId:state.scene}}));
- const version=++renderVersion;liveRenderer?.cancel();globalThis.LUTInspection?.invalidate();invalidateLevels();
+ liveRenderer?.cancel();globalThis.LUTInspection?.invalidate();invalidateLevels();
  updateControls();if(persist)save();
  const name=state.comparing?state.reference:state.selected, scene=state.scene, comparing=state.comparing;
  const path=imagePath(name,scene);
@@ -262,8 +264,9 @@ async function render({persist=true}={}) {
 }
 function select(name,{reveal=false}={}) {
  if ((!byName.has(name) && name!=='') || !canUseLut(name)) return;
- if (state.selected===name && !state.comparing&&!allTiles.some(tile=>tile.dataset.name===name&&tile.classList.contains('preview-failed'))) return;
- state.selected=name;if(Object.hasOwn(state.sceneLooks,state.scene))state.sceneLooks[state.scene]=byName.has(name)?lookNavigation.family(byName.get(name)):'';state.selectedLook=byName.has(name)?lookNavigation.family(byName.get(name)):'';state.comparing=false;render();
+ const sharedChanged=window.LUTProduct.split?.chooseLook(byName.has(name)?lookNavigation.family(byName.get(name)):'');
+ if (!sharedChanged && state.selected===name && !state.comparing&&!allTiles.some(tile=>tile.dataset.name===name&&tile.classList.contains('preview-failed'))) return;
+ state.selected=name;if(!window.LUTProduct.split?.hasGroup()&&Object.hasOwn(state.sceneLooks,state.scene))state.sceneLooks[state.scene]=byName.has(name)?lookNavigation.family(byName.get(name)):'';state.selectedLook=byName.has(name)?lookNavigation.family(byName.get(name)):'';state.comparing=false;render();
  if (reveal && name) allTiles.find(tile=>tile.dataset.name===name).scrollIntoView({block:'nearest',inline:'nearest'});
 }
 function compare() { if(globalThis.LUTInspection?.hasComparison())globalThis.LUTInspection.setCompareMode('toggle');state.comparing=!state.comparing;render(); }
@@ -293,14 +296,14 @@ document.addEventListener('keydown',event=>{
  else if(select&&(['Enter',' '].includes(event.key)||(event.altKey&&event.key==='ArrowDown')))activeDropdown=select;
 },true);
 window.addEventListener('blur',()=>{activeDropdown=null;dropdownDismissClick=false;});
-$('stage').addEventListener('click',compare);$('toggle').addEventListener('click',compare);
+$('stage').addEventListener('click',()=>{if(!window.LUTProduct.split?.isGrid())compare();});$('toggle').addEventListener('click',compare);
 $('reference').addEventListener('change',event=>{state.reference=event.target.value;state.referenceLook=byName.has(state.reference)?lookNavigation.family(byName.get(state.reference)):'';render();});
 $('favourite').addEventListener('click',()=>{
  const name=state.comparing?state.reference:state.selected;
  if(!name) return;
  if(state.favourites.includes(name)) state.favourites=state.favourites.filter(value=>value!==name);
  else state.favourites.push(name);
- if(state.favouritesOnly && !state.comparing && state.favourites.length && !state.favourites.includes(state.selected)) state.selected=state.favourites[0];
+ if(state.favouritesOnly && !state.comparing && state.favourites.length && !state.favourites.includes(state.selected)){state.selected=state.favourites[0];window.LUTProduct.split?.chooseLook(byName.has(state.selected)?lookNavigation.family(byName.get(state.selected)):'');}
  render();
 });
 function filterFavourites(only) {
@@ -308,6 +311,7 @@ function filterFavourites(only) {
  if(only && state.favourites.length && state.selected && !state.favourites.includes(state.selected)) {
   state.selected=state.favourites[0];state.comparing=false;
  }
+ window.LUTProduct.split?.chooseLook(byName.has(state.selected)?lookNavigation.family(byName.get(state.selected)):'');
  tiles.scrollLeft=0;render();
  requestAnimationFrame(()=>allTiles.find(tile=>tile.dataset.name===state.selected && !tile.hidden)?.scrollIntoView({block:'nearest',inline:'nearest'}));
 }

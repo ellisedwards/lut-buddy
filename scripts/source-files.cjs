@@ -1,5 +1,7 @@
 // Public source only: personal libraries, binaries and old prototypes stay local.
 module.exports=[
+  "ui/split-state.js",
+  "tests/split-view.test.cjs",
   "src/motion.cjs",
   "src/shoot.cjs",
   "ui/motion.js",

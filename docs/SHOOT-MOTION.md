@@ -1,4 +1,4 @@
-# Shoot review and moving scenes
+# Split view, saved looks and moving scenes
 
 Starting checkpoint: 7dd440276875dc0e394500ad4bea6a0cf7a5d9da, clean and pushed,
 with exact-commit GitHub checks passing on 2026-10-14.
@@ -27,24 +27,42 @@ so generated-cache clearing preserves them. Storage reports their bytes under
 saved stills, motion and style examples. A whole-library motion quota and
 separate companion removal control are not implemented in this version.
 
-## Shoot view and styles
+## Split view and styles
 
-The grid button beside All / Favourites opens Shoot view. Review current scenes,
-a collection or the whole project. Try a linked look family across cameras,
-select scenes, then Apply. An incompatible scene blocks the whole assignment;
-it does not silently receive a mismatched LUT. Each shot keeps exposure, relative
-white balance and bypass. Library Undo/Redo restores assignments and style edits.
+The split view replaces the old Shoot-view modal. The viewer's + opens the
+existing scene picker in choose-only mode; collection/device browsing there does
+not change the active scene. Add saved frames individually, click one to activate,
+click its name to replace, and double-click or expand to focus. Escape or the
+group icon returns without losing the group. Per-frame actions remove a pane or
+keep only it, with a separate in-session view Undo. No saved media is removed.
+
+Membership, active frame, focus and preview look family persist in this browser's
+localStorage per project. They are not project data and do not travel in project
+archives. Removed/unavailable scene IDs are pruned on reload. Duplicate additions
+focus the existing pane. Geometry chooses columns to fit the viewer.
+
+The existing stage, inspection surface, adjustments, scopes and motion remain
+owned by the active frame. Other panes remain pinned stills. One auxiliary GPU
+renderer supplies adjusted stills; snapshots have a 24 MiB cache budget. New
+inactive-pane pictures swap together after rendering; new requests cancel stale
+work and keep existing pictures visible while preparing replacements.
+
+The LUT strip previews a linked family across cameras; Compare shows the
+reference family (or original LOG) across the group. Apply is explicit in the
+viewer menu. An incompatible scene blocks the whole assignment; it never silently
+receives a mismatched LUT. Each shot keeps exposure, relative white balance and
+bypass. Library Undo/Redo restores saved assignments and style edits; it is
+separate from view Undo.
 
 Save current style stores the displayed LUT, creative contrast/saturation and an
 approved example. Applying it does not copy the example's source corrections.
-Styles are reusable across projects. The board can flag unknown profiles or
-output endpoints. Compare selected pair reports whole-frame brightness/RGB
-differences for exactly two selected frames. Composition and lighting affect
+Styles are reusable across projects. The compact menu also provides whole-frame
+brightness/RGB differences for exactly two frames. Composition and lighting affect
 these averages; it is not a skin-tone match, calibration check or quality score.
 
 ## Handoff
 
-Export saved looks produces full-resolution reference PNGs, per-shot adjusted
+Export these frames produces full-resolution reference PNGs, per-shot adjusted
 33-point CUBEs, a JSON recipe and instructions. Each CUBE includes source
 corrections and the look; apply it once to the stated unadjusted input. Unknown
 profiles get references/settings without a portable CUBE. Export uses a settings
@@ -57,7 +75,7 @@ Automated checks cover timestamp bounds, compression/colour on a known patch,
 byte-range playback, disconnected sources, capture refusal, capture inheritance,
 project round trips, atomic/stale assignments, bypass preservation, Undo/Redo,
 style references, handoff contents and cancellation cleanup. The full suite has
-102 passing tests.
+106 passing tests.
 
 In an isolated library with real footage, a six-second Sony preview measured
 513,776 bytes (about 0.5 MB), at 1280 × 720 / 24 fps. At one paused pinned frame,
@@ -68,7 +86,7 @@ removed. New full-resolution capture correctly refused while offline.
 
 A real Apple Log 2 scene also played, including a live LUT change; its short
 source produced a 1.9-second loop. Scene changes and Escape during preparation
-returned to stills. Mixed Sony / Apple Log 2 board assignment, saved styles,
+returned to stills. Mixed Sony / Apple Log 2 look assignment, saved styles,
 new still capture and a downloaded handoff ZIP were exercised in the browser.
 
 These checks do not establish broad camera/codec performance, native NLE parity,
@@ -76,3 +94,8 @@ HDR display correctness or physical camera matching. Some older personal-library
 source paths are unavailable; their saved stills remain usable but cannot gain
 motion until the original is available. No private footage, LUTs or proof images
 are bundled into the source package.
+
+Split-view browser checks in a disposable real-footage library cover add, replace,
+focus/return, keep-only, Undo, reload, mixed-camera look previews and reference
+comparison. Motion stops when activating another pane, and scopes follow the
+active frame. Per-shot source corrections remain independent.

@@ -4,8 +4,9 @@
  const sceneMap=new Map(JSON.parse(el('scenes-manifest').textContent).map(s=>[s.id,s]));
  const camera=JSON.parse(el('camera-metadata').textContent),navigation=window.LUTLookNavigation,devices=new Map([...sceneMap].map(([id])=>[id,navigation.device(camera[id]?.format?.fields?.camera_model)]));
  const deviceChoices=new Map([...devices.values()].map(d=>[d.key,d.label]));
- const filteredIds=scope=>orderIds(scope).filter(id=>!product.getSelection().sceneDevice||devices.get(id)?.key===product.getSelection().sceneDevice);
+ const filteredIds=scope=>orderIds(scope).filter(id=>!(choosing?pickerDevice:product.getSelection().sceneDevice)||devices.get(id)?.key===(choosing?pickerDevice:product.getSelection().sceneDevice));
  const baseOrder=product.getSceneNavigation(),panel=el('scene-picker'),toggle=el('scene-picker-toggle'),list=el('scene-picker-list');
+ let choosing=null,pickerDevice='';
  let data={collections:[],memberships:[],sceneOrders:[],...boot.picker},available=new Set(baseOrder),browsing='',busy=false,dragging,draggingFolder,dropTarget,naming=false,requestVersion=0,selecting=false,checked=new Set(),anchor,undoRemoval,history;
  const reopenKey='scene-picker-reopen-'+boot.projectId;
  const node=(tag,text,className)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(className)n.className=className;return n;};
@@ -23,8 +24,8 @@
   const selected=product.getSelection();let scope=selected.sceneCollection||'';
   if(scope&&!folder(scope)){scope='';product.setSceneCollection('');}
   const ids=filteredIds(scope);
-  product.setSceneNavigation(ids);
-  if(ids.length&&!ids.includes(selected.scene)){product.selectScene(ids[0]);return;}
+  if(!choosing)product.setSceneNavigation(ids);
+  if(!choosing&&!product.split?.contains(selected.scene)&&ids.length&&!ids.includes(selected.scene)){product.selectScene(ids[0]);return;}
   el('scene-picker-title').textContent=product.sceneTitle(selected.scene)||'Choose a scene';
   const label=[folder(scope)?.name,deviceChoices.get(selected.sceneDevice)].filter(Boolean).join(' · '),context=el('scene-picker-context');context.textContent=label;context.hidden=!label;
   toggle.title=(label?label+' · ':'')+(product.sceneTitle(selected.scene)||'Choose a scene');
@@ -41,8 +42,9 @@
  function status(text){el('scene-picker-status').textContent=text;}
  async function saved(work,message){if(busy)return false;busy=true;panel.setAttribute('aria-busy','true');drawActions();try{const value=await work();if(window.LUTLibrary?.acceptSnapshot)window.LUTLibrary.acceptSnapshot(value);else setLibrary(value);status(message);return true;}catch(error){status(error.message);draw();return false;}finally{busy=false;panel.removeAttribute('aria-busy');drawActions();}}
  function position(){const box=toggle.getBoundingClientRect(),width=Math.min(580,innerWidth-24);panel.style.width=width+'px';panel.style.left=Math.max(12,Math.min(box.left,innerWidth-width-12))+'px';panel.style.top=(box.bottom+8)+'px';panel.style.maxHeight=Math.max(130,innerHeight-box.bottom-20)+'px';}
- function close(focus=false){panel.hidden=true;toggle.setAttribute('aria-expanded','false');clearDrag();selecting=false;checked.clear();anchor=undefined;if(focus)toggle.focus({preventScroll:true});}
- async function open(){
+ function close(focus=false){choosing=null;el('scene-picker-heading-title').textContent='Scenes';panel.hidden=true;toggle.setAttribute('aria-expanded','false');clearDrag();selecting=false;checked.clear();anchor=undefined;if(focus)toggle.focus({preventScroll:true});}
+ async function open(options){
+  choosing=options?.onChoose||null;pickerDevice='';el('scene-picker-heading-title').textContent=options?.title||'Scenes';
   browsing=product.getSelection().sceneCollection||'';el('scene-picker-search').value='';status('');panel.hidden=false;toggle.setAttribute('aria-expanded','true');position();draw();el('scene-picker-search').focus({preventScroll:true});
   const version=++requestVersion;
   try{const r=await fetch(`api/state?project=${boot.projectId}`,{cache:'no-store'});if(!r.ok)throw new Error('Could not refresh this scene list.');const value=await r.json();if(version===requestVersion&&!busy&&!dragging&&!draggingFolder)setLibrary(value);}catch(error){status(error.message);}
@@ -50,10 +52,10 @@
  function chooseScope(id){
   if(busy)return;if(browsing!==id){checked.clear();anchor=undefined;}browsing=id;el('scene-picker-search').value='';status('');const ids=filteredIds(id);
   // Empty collections can be explored without replacing the last usable preview.
-  if(ids.length){product.setSceneCollection(id);product.setSceneNavigation(ids);if(!ids.includes(product.getSelection().scene))product.selectScene(ids[0]);else sync();}
+  if(ids.length&&!choosing){product.setSceneCollection(id);product.setSceneNavigation(ids);if(!ids.includes(product.getSelection().scene))product.selectScene(ids[0]);else sync();}
   draw();
  }
- function select(id){if(busy)return;product.setSceneCollection(browsing);product.setSceneNavigation(filteredIds(browsing));product.selectScene(id);close(true);}
+ function select(id){if(busy)return;if(choosing){const selected=choosing;close();selected(id);return;}product.setSceneCollection(browsing);product.setSceneNavigation(filteredIds(browsing));product.selectScene(id);close(true);}
  function setSelecting(value){if(busy)return;selecting=value;if(!value){checked.clear();anchor=undefined;}draw();}
  function check(id,event){
   if(busy)return;selecting=true;const ids=visibleIds(),value=!checked.has(id);
@@ -100,7 +102,7 @@
  }
  async function renameFolder(collection){const name=await collectionName('Rename collection',collection.name);if(name)await saved(()=>call('renameCollection',{id:collection.id,name,expectedName:collection.name}),'Collection renamed.');}
  function draw(){
-  const deviceSelect=el('scene-picker-device'),current=product.getSelection().sceneDevice||'';
+  const deviceSelect=el('scene-picker-device'),current=(choosing?pickerDevice:product.getSelection().sceneDevice)||'';
   deviceSelect.replaceChildren(new Option('All devices',''),...[...deviceChoices].map(([key,label])=>new Option(label,key)));deviceSelect.value=current;deviceSelect.disabled=busy;
   const folders=el('scene-picker-folders');folders.replaceChildren(folderButton('','All scenes'),node('small','Collections','scene-picker-folder-heading'),...groups().map(folderRow));
   el('scene-picker-list-title').textContent=folder(browsing)?.name||'All scenes';list.replaceChildren();
@@ -172,7 +174,7 @@
  el('scene-picker-new').addEventListener('dragover',e=>{if(!dragging||busy)return;e.preventDefault();e.dataTransfer.dropEffect='copy';el('scene-picker-new').classList.add('scene-drop-folder');});
  el('scene-picker-new').addEventListener('dragleave',()=>el('scene-picker-new').classList.remove('scene-drop-folder'));
  el('scene-picker-new').addEventListener('drop',e=>{e.preventDefault();const source=dragging;clearDrag();if(source)newCollection(source);});
- el('scene-picker-device').addEventListener('change',event=>{if(busy)return;checked.clear();anchor=undefined;product.setSceneDevice(event.target.value);sync();draw();});
+ el('scene-picker-device').addEventListener('change',event=>{if(busy)return;checked.clear();anchor=undefined;if(choosing)pickerDevice=event.target.value;else product.setSceneDevice(event.target.value);sync();draw();});
  toggle.addEventListener('click',()=>panel.hidden?open():close());el('scene-picker-close').addEventListener('click',()=>close(true));el('scene-picker-search').addEventListener('input',draw);
  document.addEventListener('pointerdown',e=>{if(panel.hidden||naming||panel.contains(e.target)||toggle.contains(e.target)||trash.contains(e.target))return;close();if(el('stage').contains(e.target)){e.preventDefault();e.stopImmediatePropagation();}},true);
  document.addEventListener('keydown',e=>{
@@ -184,6 +186,6 @@
  },true);
  document.addEventListener('focusin',e=>{if(!panel.hidden&&!naming&&!panel.contains(e.target)&&!toggle.contains(e.target))close();});
  window.addEventListener('resize',()=>{if(!panel.hidden)position();});window.addEventListener('blur',clearDrag);
- window.LUTScenePicker={sync,setLibrary,orderIds,close};sync();
+ window.LUTScenePicker={sync,setLibrary,orderIds,close,open};sync();
  const reopenMessage=sessionStorage.getItem(reopenKey);if(reopenMessage){sessionStorage.removeItem(reopenKey);open().then(()=>status(reopenMessage));}
 })();

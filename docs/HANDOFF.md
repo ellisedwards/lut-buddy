@@ -1,16 +1,24 @@
 # LUT Library developer handoff
 
-Updated 2026-10-14. This is a Mac-first, single-user local web project with an MIT
+Updated 2026-10-15. This is a Mac-first, single-user local web project with an MIT
 licence. Keep the existing viewer as the base experience; do not redesign it.
 
 ## Current delivery
 
-[Shoot review and motion](SHOOT-MOTION.md) adds an optional scene grid, explicit
+[Shoot review and motion](SHOOT-MOTION.md) adds an in-viewer split layout, explicit
 look-family assignment, creative-only saved styles with approved examples, and
 reference/CUBE/recipe handoff ZIPs. Shot exposure, balance and bypass are kept.
 Assignments and styles participate in existing persistent Undo. Schema 8 adds
 styles, backing up older databases before migration. Project archives remain
 backward-compatible with the existing version 1 format.
+
+The old Shoot-view modal is replaced by panes inside the established viewer.
+Use + to add, a frame name to replace, expand/double-click to focus and Escape to
+return. Pane removal and keep-only change only the view and have in-session Undo.
+Browser-local layout persists per project, outside archives. The LUT strip and
+Compare preview across all panes; adjustments/scopes/motion follow the active
+frame. The compact viewer menu retains explicit look assignment, styles and
+handoff. Preserve that distinction between previewing and saving a look.
 
 Space or Play uses a saved six-second maximum silent H.264 companion; Escape
 restores the pinned still. The same GPU look math renders stills and video.
@@ -67,7 +75,7 @@ the new full-resolution worker. Preserve this boundary.
 
 Local synthetic/browser checks cover these tools, independent colour swatches,
 actual downloads, narrow-screen layout and cancellation during inspection.
-The automated suite has 102 tests. Recheck the exact runtime/commit before claims.
+The automated suite has 106 tests. Recheck the exact runtime/commit before claims.
 
 Converted LUT thumbnails use a subtle orange-black abbreviation band in dark
 mode and a warm white band in light mode. The **Converted from** readout below

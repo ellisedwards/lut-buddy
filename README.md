@@ -158,20 +158,32 @@ button offers Wipe / Side by side, original-resolution 100% zoom, full-resolutio
 16-bit PNG export and a separate adjusted 33-point CUBE. Original clips and LUTs
 remain unchanged. [How to use these tools and their limits](docs/INSPECTION.md).
 
-## Shoot view, saved styles and moving scenes
+## Split view, saved styles and moving scenes
 
-Open the grid icon beside All / Favourites for **Shoot view**. Choose the current
-scenes, all scenes or a collection; try a look, select shots and **Apply to
-selected**. Compatible linked camera versions are chosen together. Exposure,
-relative white balance and bypass stay with each shot. Applying is explicit and
-Library Undo restores the previous assignments.
+Use **+** in the viewer to add saved frames one at a time. They share the main
+viewer and LUT strip. Click a frame to make it active; adjustments, scopes and
+playback follow that frame. Double-click or use its expand icon to see it large;
+**Escape** or the group icon returns to the same bunch.
 
-**Save current style** keeps the displayed LUT, creative contrast/saturation and
-an approved example. Select that named style in another project to try it on new
-shots. It does not copy the example shot's exposure or white balance. **Export
-saved looks** downloads full-resolution reference PNGs, per-shot adjusted CUBEs,
-a recipe and instructions. Check the result in your editor; editor-specific
-reproduction remains **[Unverified]**.
+Click a frame's name to replace it. Its **•••** menu removes it from the view or
+keeps only that frame. **Undo view change** restores the previous group. These
+actions never remove saved scenes. The arrangement survives reloads in this
+browser, separately for each project; it is not included in project archives.
+View Undo lasts until the page reloads.
+
+Choosing a LUT previews compatible linked camera versions across the group.
+**Compare / V** shows the reference across the group. In **••• → Apply look to
+frames**, save that choice explicitly. Each shot keeps its exposure, relative
+white balance and bypass; Library Undo restores saved assignments. Missing camera
+versions show a warning and prevent a mismatched group assignment.
+
+The viewer's **•••** menu also holds saved styles and handoff export. **Save
+current style** keeps the displayed LUT, creative contrast/saturation and an
+approved example. Applying a named style keeps each shot's source corrections.
+**Export these frames** downloads full-resolution pinned reference PNGs,
+per-shot adjusted CUBEs, a recipe and instructions. It exports the pinned stills,
+including when motion is playing. Editor-specific reproduction remains
+**[Unverified]**.
 
 Press **Space** or the viewer's Play icon for a silent loop of up to six seconds
 around a pinned still. Older scenes create it once, while their original is
