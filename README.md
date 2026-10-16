@@ -165,6 +165,9 @@ viewer and LUT strip. Click a frame to make it active; adjustments, scopes and
 playback follow that frame. Double-click or use its expand icon to see it large;
 **Escape** or the group icon returns to the same bunch.
 
+Frames meet edge-to-edge in a centred group. Names and frame controls overlay
+the image on hover or keyboard focus, so headers do not separate the pictures.
+
 Click a frame's name to replace it. Its **•••** menu removes it from the view or
 keeps only that frame. **Undo view change** restores the previous group. These
 actions never remove saved scenes. The arrangement survives reloads in this

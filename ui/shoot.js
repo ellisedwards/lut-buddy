@@ -49,7 +49,14 @@
   }else for(const {element,home}of homes)home.after(element);
   geometry();buttons();remember();document.dispatchEvent(new CustomEvent('lut-split-layout'));
  }
- function geometry(){viewer.style.setProperty('--pane-bottom',($('lut-dock').hidden?8:$('lut-dock').offsetHeight+28)+'px');if(isGrid()){let best=1,area=0;const count=model.state.ids.length;for(let cols=1;cols<=Math.min(count,8);cols++){const rows=Math.ceil(count/cols),w=(grid.clientWidth-(cols-1)*5)/cols,h=(grid.clientHeight-(rows-1)*5)/rows-28,fit=Math.min(w,h*16/9),score=fit*fit*(count/(rows*cols));if(score>area){area=score;best=cols;}}grid.style.setProperty('--pane-columns',best);}}
+ function geometry(){
+  viewer.style.setProperty('--pane-bottom',($('lut-dock').hidden?8:$('lut-dock').offsetHeight+28)+'px');if(!isGrid())return;
+  // Fit the images themselves, then centre the touching grid as one group.
+  // Full-width cells with contain-fit images left empty space at every seam.
+  let best=1,area=0,width=0;const count=model.state.ids.length;
+  for(let cols=1;cols<=Math.min(count,8);cols++){const rows=Math.ceil(count/cols),fit=Math.min(grid.clientWidth/cols,grid.clientHeight/rows*16/9),score=fit*fit*(count/(rows*cols));if(score>area){area=score;best=cols;width=fit;}}
+  grid.style.setProperty('--pane-columns',best);grid.style.setProperty('--pane-width',width+'px');grid.style.setProperty('--pane-height',width*9/16+'px');
+ }
  function show(){closeMenus();layout();if(product.getSelection().scene!==model.state.active)product.selectScene(model.state.active);else product.refresh();}
  function activate(id){snapshotActive();model.activate(id);show();}
  function focus(id=model.state.active){snapshotActive();model.focus(id);show();}
