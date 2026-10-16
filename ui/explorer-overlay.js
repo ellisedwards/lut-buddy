@@ -227,7 +227,7 @@ async function render({persist=true}={}) {
  if(!scenes.length){preview.hidden=true;preview.removeAttribute('src');$('live-preview').hidden=true;$('filename').textContent='Your footage, your looks';$('look-detail').textContent='Open Library to import a clip and mark your scenes.';$('empty-library').hidden=false;return;}
  $('empty-library').hidden=true;
  const assigned=state.sceneLooks?.[state.scene];if(assigned!==undefined){state.selected=records.find(r=>lookNavigation.family(r)===assigned&&canUseLut(r.name))?.name||'';state.selectedLook=assigned;}
- const shared=window.LUTProduct.split?.previewFamily();if(shared!==undefined){state.selected=records.find(r=>lookNavigation.family(r)===shared&&canUseLut(r.name))?.name||'';state.selectedLook=shared;}
+ const shared=window.LUTProduct.split?.previewFamily(state.scene);if(shared!==undefined){state.selected=records.find(r=>lookNavigation.family(r)===shared&&canUseLut(r.name))?.name||'';state.selectedLook=shared;}
  const version=++renderVersion;
  document.dispatchEvent(new CustomEvent('lut-render-start',{detail:{sceneId:state.scene}}));
  liveRenderer?.cancel();globalThis.LUTInspection?.invalidate();invalidateLevels();

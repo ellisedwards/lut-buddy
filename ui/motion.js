@@ -3,10 +3,10 @@
  const $=id=>document.getElementById(id),product=window.LUTProduct,video=document.createElement('video'),canvas=$('motion-canvas');video.muted=true;video.loop=true;video.playsInline=true;video.preload='metadata';video.id='motion-video';video.hidden=true;document.body.append(video);
  let renderer,view,motion,active=false,preparing=false,following=false,task=0,controller,callback,frameBusy=false,frames=0,lastError='',lastScope=0;
  const identity={exposure:0,warmth:0,tint:0,contrast:1,saturation:1,enabled:true};
- const peers=new Map(),peerSurface=document.createElement('canvas');let allPlaying=false,peerRenderer,peerQueue=Promise.resolve();
+ const peers=new Map(),peerSources=new Map(),peerSurface=document.createElement('canvas');let allPlaying=false,peerRenderer,peerQueue=Promise.resolve();
  function cancelPeerFrame(peer){if(peer.callback!=null){if(peer.video.cancelVideoFrameCallback)peer.video.cancelVideoFrameCallback(peer.callback);else cancelAnimationFrame(peer.callback);}peer.callback=null;}
- function pausePeer(peer){peer.playing=false;peer.video.pause();cancelPeerFrame(peer);}
- function releasePeer(peer){pausePeer(peer);peer.disposed=true;peer.video.removeAttribute('src');peer.video.load();peer.video.remove();peer.canvas.remove();}
+ function pausePeer(peer){peer.playing=false;cancelPeerFrame(peer);if(!peer.source.main&&![...peer.source.users].some(p=>p.playing))peer.video.pause();}
+ function releasePeer(peer){pausePeer(peer);peer.disposed=true;peer.source.users.delete(peer);if(!peer.source.users.size){if(!peer.source.main){peer.video.removeAttribute('src');peer.video.load();peer.video.remove();}peerSources.delete(peer.source.id);}peer.canvas.remove();}
  function clearPeers(){for(const peer of peers.values())releasePeer(peer);peers.clear();}
  function drawPeer(peer){
   if(peer.disposed||peer.busy||peer.video.readyState<2)return Promise.resolve();peer.busy=true;
@@ -14,14 +14,16 @@
   peerQueue=work.catch(()=>{});return work.catch(error=>{if(peer.disposed)return;peer.error=error.message;pausePeer(peer);peer.canvas.hidden=true;}).finally(()=>{peer.busy=false;});
  }
  function schedulePeer(peer){if(peer.disposed||!peer.playing||peer.video.paused||document.hidden||peer.callback!=null)return;const next=()=>{peer.callback=null;drawPeer(peer).finally(()=>schedulePeer(peer));};peer.callback=peer.video.requestVideoFrameCallback?peer.video.requestVideoFrameCallback(next):requestAnimationFrame(next);}
- async function playPeer(peer){if(peer.disposed||peer.loading)return;peer.loading=true;try{await peer.video.play();if(peer.disposed||!allPlaying||document.hidden){pausePeer(peer);return;}peer.playing=true;schedulePeer(peer);}catch(error){peer.error=error.message;pausePeer(peer);}finally{peer.loading=false;}}
+ async function playPeer(peer){if(peer.disposed||peer.loading)return;if(peer.source.main){peer.playing=active&&!video.paused;if(peer.playing)schedulePeer(peer);return;}peer.loading=true;try{await peer.video.play();if(peer.disposed||!allPlaying||document.hidden){pausePeer(peer);return;}peer.playing=true;schedulePeer(peer);}catch(error){peer.error=error.message;pausePeer(peer);}finally{peer.loading=false;}}
  function makePeer(current){
-  const video=document.createElement('video'),canvas=document.createElement('canvas'),peer={video,canvas,view:current,frames:0,playing:false,disposed:false};video.muted=true;video.loop=true;video.playsInline=true;video.preload='auto';video.hidden=true;video.dataset.motionPeer=current.scene.id;canvas.className='pane-motion';canvas.hidden=true;canvas.setAttribute('aria-hidden','true');current.body.append(canvas);document.body.append(video);
-  video.addEventListener('loadeddata',()=>{if(peer.disposed)return;video.currentTime=Math.min(current.scene.motion.pinOffset,Math.max(0,current.scene.motion.duration-.05));if(allPlaying&&!document.hidden)playPeer(peer);});video.addEventListener('seeked',()=>drawPeer(peer));video.addEventListener('error',()=>{peer.error='Saved moving preview could not play.';pausePeer(peer);canvas.hidden=true;});video.src='assets/'+current.scene.motion.asset;video.load();return peer;
+  let source=peerSources.get(current.scene.id);
+  if(!source){const main=current.scene.id===(product.getSelection?.().scene||product.getView()?.scene.id),media=main?video:document.createElement('video');source={id:current.scene.id,video:media,main,users:new Set()};peerSources.set(source.id,source);if(!main){media.muted=true;media.loop=true;media.playsInline=true;media.preload='auto';media.hidden=true;media.dataset.motionPeer=current.scene.id;document.body.append(media);media.addEventListener('loadeddata',()=>{if(!source.users.size)return;media.currentTime=Math.min(current.scene.motion.pinOffset,Math.max(0,current.scene.motion.duration-.05));if(allPlaying&&!document.hidden)for(const p of source.users)playPeer(p);});media.addEventListener('seeked',()=>{for(const p of source.users)drawPeer(p);});media.addEventListener('error',()=>{for(const p of source.users){p.error='Saved moving preview could not play.';pausePeer(p);p.canvas.hidden=true;}});media.src='assets/'+current.scene.motion.asset;media.load();}}
+  const canvas=document.createElement('canvas'),peer={source,video:source.video,canvas,view:current,frames:0,playing:false,disposed:false};source.users.add(peer);canvas.className='pane-motion';canvas.hidden=true;canvas.setAttribute('aria-hidden','true');current.body.append(canvas);return peer;
  }
  function syncPeers(){
-  const panes=product.split?.motionPanes?.()||[],visible=new Set(panes.map(p=>p.scene.id));for(const [id,peer]of peers)if(!visible.has(id)){releasePeer(peer);peers.delete(id);}
-  for(const current of panes){if(!current.scene.motion)continue;let peer=peers.get(current.scene.id);if(!peer&&allPlaying){peer=makePeer(current);peers.set(current.scene.id,peer);}if(!peer)continue;peer.view=current;if(allPlaying&&!document.hidden){if(peer.video.paused)playPeer(peer);else schedulePeer(peer);}drawPeer(peer);}
+  const panes=product.split?.motionPanes?.()||[],visible=new Set(panes.map(p=>p.paneId||p.scene.id)),activeScene=product.getSelection?.().scene||product.getView()?.scene.id;
+  for(const [id,peer]of peers)if(!visible.has(id)||peer.source.main!==(peer.view.scene.id===activeScene)){releasePeer(peer);peers.delete(id);}
+  for(const current of panes){if(!current.scene.motion)continue;const id=current.paneId||current.scene.id,same=current.scene.id===activeScene;let peer=peers.get(id);if(!peer&&(allPlaying||same&&active)){peer=makePeer(current);peers.set(id,peer);}if(!peer)continue;peer.view=current;if(!document.hidden&&(allPlaying||same&&active&&!video.paused)){if(!peer.playing||peer.video.paused)playPeer(peer);else schedulePeer(peer);}else pausePeer(peer);drawPeer(peer);}
  }
  async function toggleAll(){
   if(allPlaying){allPlaying=false;following=false;for(const peer of peers.values())pausePeer(peer);if(preparing)pauseForSceneChange();if(active){video.pause();cancelFrame();await draw();}controls();return;}
@@ -41,11 +43,11 @@
    motion=view.scene.motion;if(!motion){$('motion-status').textContent='Saving a short moving preview…';motion=await call('prepareMotion',{sceneId:view.scene.id},signal);if(version!==task)return;view.scene.motion=motion;}
    if(version!==task)return;video.src='assets/'+motion.asset;await new Promise((resolve,reject)=>{const timeout=setTimeout(()=>finish(Error('Saved moving preview took too long to load.')),15000),abort=()=>finish(Object.assign(Error('Cancelled'),{name:'AbortError'})),finish=error=>{clearTimeout(timeout);signal.removeEventListener('abort',abort);video.onloadeddata=null;video.onerror=null;error?reject(error):resolve();};signal.addEventListener('abort',abort,{once:true});video.onloadeddata=()=>finish();video.onerror=()=>finish(Error('Saved moving preview could not play.'));video.load();});if(version!==task)return;
    active=true;video.currentTime=Math.min(motion.pinOffset,Math.max(0,motion.duration-.05));await new Promise((resolve,reject)=>{if(!video.seeking){resolve();return;}const finish=error=>{clearTimeout(timeout);video.removeEventListener('seeked',seeked);signal.removeEventListener('abort',abort);error?reject(error):resolve();},seeked=()=>finish(),abort=()=>finish(Object.assign(Error('Cancelled'),{name:'AbortError'})),timeout=setTimeout(()=>finish(Error('Moving preview could not seek to the pinned frame.')),10000);video.addEventListener('seeked',seeked,{once:true});signal.addEventListener('abort',abort,{once:true});if(signal.aborted)abort();});if(version!==task)return;
-   await draw();if(version!==task)return;if(following&&!document.hidden){await video.play();schedule();}$('motion-status').textContent='';controls();
+   await draw();if(version!==task)return;if(following&&!document.hidden){await video.play();schedule();}syncPeers();$('motion-status').textContent='';controls();
   }catch(e){if(version===task&&e.name!=='AbortError'){if(following)waitForNextMovingScene();else{stop();$('motion-status').textContent=e.message;}}}finally{if(version===task)preparing=false;$('motion-play').disabled=false;}
  }
  async function toggle(){
-  if(active){if(video.paused){following=true;await video.play();schedule();}else{following=false;video.pause();cancelFrame();await draw();window.LUTScopePanel?.update({...view,surface:canvas});}controls();return;}
+  if(active){if(video.paused){following=true;await video.play();schedule();}else{following=false;video.pause();cancelFrame();await draw();window.LUTScopePanel?.update({...view,surface:canvas});}syncPeers();controls();return;}
   following=true;await start(product.getView());
  }
  $('motion-play').addEventListener('click',()=>toggle().catch(e=>$('motion-status').textContent=e.message));video.addEventListener('seeked',()=>{draw();controls();});

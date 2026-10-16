@@ -21,7 +21,7 @@ function harness(){
  const scenes=Array.from({length:4},(_,i)=>({id:String(i),motion:{asset:String(i)+'.mp4',pinOffset:2,duration:6}}));
  let current={scene:scenes[0],record:{name:'Look'},adjustments:adjustment},panes=scenes.slice(1).map(scene=>({scene,record:current.record,adjustments:adjustment,body:new Element()}));
  const product={boot:{projectId:'test',token:'test'},getView:()=>current,split:{motionPanes:()=>panes}};
- const window=new EventTarget();window.LUTProduct=product;window.LUTPreviewRenderer=class{constructor(canvas){renderers++;this.canvas=canvas;}cancel(){}async renderMotion(scene,record,adjustments){renders.push({scene:scene.id,record,adjustments});this.canvas.width=1920;this.canvas.height=1080;return true;}};
+ const window=new EventTarget();window.LUTProduct=product;window.LUTPreviewRenderer=class{constructor(canvas){renderers++;this.canvas=canvas;}cancel(){}async renderMotion(scene,record,adjustments,video){renders.push({scene:scene.id,record,adjustments,video,time:video.currentTime});this.canvas.width=1920;this.canvas.height=1080;return true;}};
  vm.runInNewContext(fs.readFileSync(require.resolve('../ui/motion.js'),'utf8'),{document,window,performance:{now:()=>123},AbortController,setTimeout,clearTimeout,requestAnimationFrame:fn=>{const id=++serial;callbacks.set(id,fn);return id;},cancelAnimationFrame:id=>callbacks.delete(id)});
  const flush=async()=>{for(let i=0;i<12;i++)await new Promise(setImmediate);};
  const event=(type,detail)=>{const e=new Event(type);e.detail=detail;document.dispatchEvent(e);};
@@ -57,4 +57,13 @@ test('A delayed video start cannot restart after pause-all or leaving the group'
  const h=harness();await h.product.motion.toggleAll();await h.flush();await h.product.motion.toggleAll();
  let release;const gate=new Promise(r=>release=r);const peer=h.videos[1];peer.deferPlay=gate;
  const starting=h.product.motion.toggleAll();await h.flush();h.setPanes([]);h.event('lut-split-layout');await h.product.motion.toggleAll();release();await starting;await h.flush();assert.equal(peer.paused,true);assert.equal(h.videos[0].paused,true);assert.equal(h.callbacks.size,0);h.product.motion.stop();
+});
+
+test('Copies of the active scene share its video clock while rendering separate LUTs',async()=>{
+ const h=harness(),mono={name:'Mono'},warm={name:'Warm'},base=h.current();h.setPanes([{...base,paneId:'copy-1',record:mono,body:h.body()},{...base,paneId:'copy-2',record:warm,body:h.body()}]);await h.product.motion.toggle();await h.flush();assert.equal(h.videos.length,1,'Copies use the active decoder, not extra videos');assert.equal(h.product.motion.diagnostics().peers.length,2);assert.ok(h.product.motion.diagnostics().peers.every(p=>p.playing));assert.ok(h.renders.some(r=>r.record===mono));assert.ok(h.renders.some(r=>r.record===warm));assert.ok(h.renders.every(r=>r.video===h.videos[0]));
+ h.videos[0].currentTime=4;for(const [id,callback]of [...h.callbacks]){h.callbacks.delete(id);callback();}await h.flush();assert.ok(h.renders.filter(r=>r.time===4).some(r=>r.record===mono));assert.ok(h.renders.filter(r=>r.time===4).some(r=>r.record===warm));await h.product.motion.toggle();await h.flush();assert.equal(h.videos[0].paused,true);assert.ok(h.product.motion.diagnostics().peers.every(p=>!p.playing));h.product.motion.stop();assert.equal(h.videos[0].removed,undefined,'Releasing copies never removes the main video');
+});
+
+test('Copies of another scene share one peer source and survive one copy being removed',async()=>{
+ const h=harness(),scene=h.scenes[1],base=h.current(),one={...base,scene,paneId:'one',body:h.body()},two={...base,scene,paneId:'two',record:{name:'Mono'},body:h.body()};h.setPanes([one,two]);await h.product.motion.toggleAll();await h.flush();assert.equal(h.videos.length,2);assert.equal(h.product.motion.diagnostics().peers.length,2);h.setPanes([two]);h.event('lut-split-layout');await h.flush();assert.equal(h.videos[1].removed,undefined);assert.equal(h.videos[1].paused,false);assert.equal(h.product.motion.diagnostics().peers[0].id,'two');h.setPanes([]);h.event('lut-split-layout');assert.equal(h.videos[1].removed,true);assert.equal(h.videos[1].paused,true);assert.equal(h.videos[0].paused,false);h.product.motion.stop();
 });
