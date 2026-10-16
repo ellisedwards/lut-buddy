@@ -50,12 +50,17 @@
   geometry();buttons();remember();document.dispatchEvent(new CustomEvent('lut-split-layout'));
  }
  function geometry(){
-  viewer.style.setProperty('--pane-bottom',($('lut-dock').hidden?8:$('lut-dock').offsetHeight+28)+'px');if(!isGrid())return;
+  if(!isGrid())return;
   // Fit the images themselves, then centre the touching grid as one group.
   // Full-width cells with contain-fit images left empty space at every seam.
   let best=1,area=0,width=0;const count=model.state.ids.length;
-  for(let cols=1;cols<=Math.min(count,8);cols++){const rows=Math.ceil(count/cols),fit=Math.min(grid.clientWidth/cols,grid.clientHeight/rows*16/9),score=fit*fit*(count/(rows*cols));if(score>area){area=score;best=cols;width=fit;}}
+  for(let cols=1;cols<=Math.min(count,8);cols++){if((count===3||count===4)&&cols!==2)continue;const rows=Math.ceil(count/cols),fit=Math.min(grid.clientWidth/cols,grid.clientHeight/rows*16/9),score=fit*fit*(count/(rows*cols));if(score>area){area=score;best=cols;width=fit;}}
   grid.style.setProperty('--pane-columns',best);grid.style.setProperty('--pane-width',width+'px');grid.style.setProperty('--pane-height',width*9/16+'px');
+  // The global toolbar overlays the images. Keep local controls below it only
+  // when the first row actually reaches that edge of the viewer.
+  const rows=Math.ceil(count/best),top=(grid.clientHeight-rows*width*9/16)/2,toolbarBottom=Math.max($('split-tools').offsetTop+$('split-tools').offsetHeight,$('motion-play').parentElement.offsetTop+$('motion-play').parentElement.offsetHeight);
+  grid.style.setProperty('--pane-tools-top',Math.max(5,toolbarBottom+8-top)+'px');
+  for(const [index,id]of model.state.ids.entries())cells.get(id).pane.classList.toggle('pane-top-row',index<best);
  }
  function show(){closeMenus();layout();if(product.getSelection().scene!==model.state.active)product.selectScene(model.state.active);else product.refresh();}
  function activate(id){snapshotActive();model.activate(id);show();}

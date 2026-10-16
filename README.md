@@ -167,6 +167,8 @@ playback follow that frame. Double-click or use its expand icon to see it large;
 
 Frames meet edge-to-edge in a centred group. Names and frame controls overlay
 the image on hover or keyboard focus, so headers do not separate the pictures.
+The images extend behind the viewer controls and LUT strip, as in single view.
+Three frames use the same 2 × 2 layout as four, leaving the fourth slot empty.
 
 Click a frame's name to replace it. Its **•••** menu removes it from the view or
 keeps only that frame. **Undo view change** restores the previous group. These
