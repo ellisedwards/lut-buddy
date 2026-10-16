@@ -410,6 +410,7 @@ window.addEventListener('keydown',event=>{
  if(event.key==='Escape'&&$('viewer').classList.contains('expanded')){event.preventDefault();$('viewer').classList.remove('expanded');syncFullscreen();return;}
  if(event.key==='Escape'&&!$('adjust-panel').hidden){showAdjustmentPanel(false);return;}
  if (document.querySelector('dialog[open]') || !scenes.length || event.target.closest?.('select,input,textarea,[contenteditable]:not([contenteditable="false"])') || event.altKey || event.ctrlKey || event.metaKey || $('about-dialog').open) return;
+ if(event.code==='Space'&&event.shiftKey){event.preventDefault();if(!event.repeat)window.LUTProduct.motion?.toggleAll().catch(error=>$('motion-status').textContent=error.message);return;}
  if(event.shiftKey&&event.key!=='?')return;
  if(['ArrowUp','ArrowDown'].includes(event.key)){event.preventDefault();if(!sceneNavigation.length)return;const index=sceneNavigation.indexOf(state.scene),next=Math.max(0,Math.min(sceneNavigation.length-1,index+(event.key==='ArrowDown'?1:-1)));$('scene').value=sceneNavigation[next];$('scene').dispatchEvent(new Event('change',{bubbles:true}));return;}
  const shortcuts={f:'favourite',l:'strip-toggle',c:'camera-info',h:'histogram-toggle',e:'adjust-open',m:'fullscreen',t:'theme',b:'adjust-bypass','?':'about'};
@@ -421,7 +422,7 @@ window.addEventListener('keydown',event=>{
   const names=visibleNames(),index=names.indexOf(state.selected);
   const next=event.key==='Home'?0:event.key==='End'?names.length-1:Math.max(0,Math.min(names.length-1,index+(event.key==='ArrowRight'?1:-1)));
   select(names[next],{reveal:true});
- } else if(event.key.toLowerCase()==='v'){event.preventDefault();if(!event.repeat)compare();} else if(event.code==='Space' && (!event.target.matches('button') || event.target.classList.contains('tile') || event.target.id==='stage')) { event.preventDefault();if(!event.repeat)window.LUTProduct.motion?.toggle().catch(error=>$('motion-status').textContent=error.message); }
+ } else if(event.key.toLowerCase()==='v'){event.preventDefault();if(!event.repeat)compare();} else if(event.code==='Space' && (!event.target.matches('button') || event.target.classList.contains('tile') || event.target.classList.contains('pane-hit') || event.target.id==='stage')) { event.preventDefault();if(!event.repeat)window.LUTProduct.motion?.toggle().catch(error=>$('motion-status').textContent=error.message); }
 });
 $('viewer').append($('about-dialog'));
 $('about').addEventListener('click',()=>$('about-dialog').showModal());

@@ -47,7 +47,7 @@
    const active=cells.get(model.state.active);for(const {element}of homes)active.body.append(element);
    for(const [id,cell]of cells){cell.pane.classList.toggle('active',id===model.state.active);cell.hit.hidden=id===model.state.active;cell.pane.setAttribute('aria-current',String(id===model.state.active));if(id===model.state.active){const target=targetFor(id),missing=!!target&&!recordFor(sceneMap.get(id),target);cell.pane.classList.toggle('pane-warning',missing);cell.pane.title=missing?'No compatible look for this recording profile':'';}}
   }else for(const {element,home}of homes)home.after(element);
-  geometry();buttons();remember();
+  geometry();buttons();remember();document.dispatchEvent(new CustomEvent('lut-split-layout'));
  }
  function geometry(){viewer.style.setProperty('--pane-bottom',($('lut-dock').hidden?8:$('lut-dock').offsetHeight+28)+'px');if(isGrid()){let best=1,area=0;const count=model.state.ids.length;for(let cols=1;cols<=Math.min(count,8);cols++){const rows=Math.ceil(count/cols),w=(grid.clientWidth-(cols-1)*5)/cols,h=(grid.clientHeight-(rows-1)*5)/rows-28,fit=Math.min(w,h*16/9),score=fit*fit*(count/(rows*cols));if(score>area){area=score;best=cols;}}grid.style.setProperty('--pane-columns',best);}}
  function show(){closeMenus();layout();if(product.getSelection().scene!==model.state.active)product.selectScene(model.state.active);else product.refresh();}
@@ -101,7 +101,7 @@
  document.addEventListener('pointerdown',e=>{if(!e.target.closest('#split-menu,#pane-menu,#split-menu-open,.pane-heading'))closeMenus();});
  document.addEventListener('keydown',e=>{if(e.key!=='Escape'||e.defaultPrevented||document.querySelector('dialog[open]')||!$('scene-picker').hidden)return;if(!$('split-menu').hidden||!$('pane-menu').hidden){closeMenus();e.preventDefault();e.stopImmediatePropagation();}else if(model.state.focused){group();e.preventDefault();e.stopImmediatePropagation();}},true);
  window.addEventListener('resize',geometry);const sizing=new ResizeObserver(geometry);sizing.observe($('lut-dock'));sizing.observe(viewer);
- product.split={hasGroup,isGrid,contains:id=>hasGroup()&&model.state.ids.includes(id),previewFamily:()=>model.state.family!==null?model.state.family:undefined,chooseLook:value=>{const next=hasGroup()?value:null,changed=next!==model.state.family;model.state.family=next;remember();return changed;}};
+ product.split={hasGroup,isGrid,motionPanes:()=>isGrid()?model.state.ids.filter(id=>id!==model.state.active).map(id=>{const scene=sceneMap.get(id);return {scene,record:recordFor(scene,targetFor(id)),adjustments:settings(scene),body:cells.get(id).body};}):[],contains:id=>hasGroup()&&model.state.ids.includes(id),previewFamily:()=>model.state.family!==null?model.state.family:undefined,chooseLook:value=>{const next=hasGroup()?value:null,changed=next!==model.state.family;model.state.family=next;remember();return changed;}};
  if(model.state.ids.length&&!model.state.ids.includes(product.getSelection().scene))model.replace(model.state.active,product.getSelection().scene);
  layout();product.refresh();
 })();

@@ -188,12 +188,15 @@ including when motion is playing. Editor-specific reproduction remains
 Press **Space** or the viewer's Play icon for a silent loop of up to six seconds
 around a pinned still. Older scenes create it once, while their original is
 available. New captures offer a checked **Save a short moving preview** option. **Escape**
-returns to the pinned still. Scrub or pause the loop, change looks, or save
-another full-resolution still from the original. Thumbnails always stay still.
-The scopes follow the moving frames while motion is active.
+returns to the pinned still. Pause the loop or change looks. Thumbnails always
+stay still. **Shift + Space** plays or pauses all visible frames, independently
+looping each saved companion. **Space** controls just the active frame. Expanding
+a frame pauses and unloads the hidden videos; returning resumes the group when
+group playback is enabled. Frames without saved motion remain still. Scopes
+always follow the active frame.
 
 Saved motion works without its original. New full-resolution captures still need
-the original. These compressed companions are at most 1280 pixels wide and
+the original. New compressed companions are at most 1920 pixels wide and
 12 MiB each; they accompany the saved still in project exports and backups.
 They do not replace or copy the whole original video. Clearing generated previews
 keeps these saved companions. Compression can change colour slightly: use the
