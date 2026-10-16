@@ -2,6 +2,8 @@
 module.exports=[
   "ui/split-state.js",
   "tests/split-view.test.cjs",
+  "tests/split-intake.test.cjs",
+  "tests/motion-playback.test.cjs",
   "src/motion.cjs",
   "src/shoot.cjs",
   "ui/motion.js",

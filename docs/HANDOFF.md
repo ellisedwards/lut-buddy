@@ -1,6 +1,6 @@
 # LUT Library developer handoff
 
-Updated 2026-10-15. This is a Mac-first, single-user local web project with an MIT
+Updated 2026-10-16. This is a Mac-first, single-user local web project with an MIT
 licence. Keep the existing viewer as the base experience; do not redesign it.
 
 ## Current delivery
@@ -15,15 +15,34 @@ backward-compatible with the existing version 1 format.
 The old Shoot-view modal is replaced by panes inside the established viewer.
 Use + to add, a frame name to replace, expand/double-click to focus and Escape to
 return. Pane removal and keep-only change only the view and have in-session Undo.
-Browser-local layout persists per project, outside archives. The LUT strip and
-Compare preview across all panes; adjustments/scopes/motion follow the active
-frame. The compact viewer menu retains explicit look assignment, styles and
-handoff. Preserve that distinction between previewing and saving a look.
+Browser-local layout, link state and per-pane looks persist per project, outside
+archives. Pane identity is separate from scene identity: copies share saved
+media and never create duplicate library scenes. Three frames use a 2 x 2 layout
+with the fourth slot empty. Frames touch and extend underneath both viewer
+toolbars and the LUT strip; pane controls overlay images on hover or focus.
+The duplicate icon copies a scene into a new pane without opening the picker.
+Copies start with the same look and automatically unlink. The chain icon switches
+between one look across the group and a separate look per pane. Linking adopts
+the active pane's look; unlinking preserves the displayed looks. Compare affects
+the linked group or only the active pane when unlinked. Exposure and balance
+remain scene-based, including across copies; scopes follow the active pane.
+The compact viewer menu retains explicit look assignment, styles and
+handoff. Unlinked assignment saves only the active scene; linked assignment
+saves the shared look to distinct scenes. Export supports separate looks on
+multiple copies of the same scene. Preserve that distinction between previewing
+and saving a look.
 
-Space or Play uses a saved six-second maximum silent H.264 companion; Escape
+Space or Play uses a saved six-second maximum silent H.264 companion; Shift +
+Space plays all visible scenes. Copies of a scene share a decoder/playback clock
+and render their own LUTs. Other scenes loop independently. There is no visible
+scrub strip in the main viewer. Playback stays armed across scenes without
+companions, so returning to an available companion resumes it. Escape
 restores the pinned still. The same GPU look math renders stills and video.
 Scopes sample the current moving source/output together. Moving companions live
 under frames, survive disconnected originals and travel with projects/backups.
+The v2 encoder uses up to 1920-wide H.264, CRF 14, maxrate 10M, 24 fps and
+12 MiB/six-second bounds. It is still 8-bit yuv420p; higher bitrate is not a
+10-bit precision guarantee. Old companion assets are retained for history.
 Full-resolution captures still decode the original. New captures from motion
 inherit their parent shot's corrections and the displayed look. Normal still
 navigation does not prepare motion or start full-resolution processing.
@@ -75,7 +94,11 @@ the new full-resolution worker. Preserve this boundary.
 
 Local synthetic/browser checks cover these tools, independent colour swatches,
 actual downloads, narrow-screen layout and cancellation during inspection.
-The automated suite has 106 tests. Recheck the exact runtime/commit before claims.
+The automated suite passed 123 tests at implementation commit `8ead1b0` on
+2026-10-16. Focused checks cover duplication, independent looks, link/unlink,
+No LUT, Undo/reload/keep-only, shared video sources and per-pane export. These
+checks do not establish visual acceptance or NLE colour agreement. Current
+browser visual validation is blocked; see the continuation notes below.
 
 Converted LUT thumbnails use a subtle orange-black abbreviation band in dark
 mode and a warm white band in light mode. The **Converted from** readout below
@@ -139,6 +162,9 @@ not a previous green run, before describing a build as verified.
 | --- | --- |
 | Viewer, metadata strip and converted provenance | `ui/explorer-overlay.js`, `ui/viewer.css` |
 | Collections, device filtering, selection and drag ordering | `ui/scene-picker.js` |
+| Split panes and local comparison state | `ui/shoot.js`, `ui/split-state.js`, `ui/shoot.css`, `tests/split-intake.test.cjs`, `tests/split-view.test.cjs` |
+| Active/peer motion and shared decoders | `ui/motion.js`, `src/motion.cjs`, `tests/motion-playback.test.cjs` |
+| Saved styles and per-pane handoff ZIPs | `src/shoot.cjs`, `tests/shoot-motion.test.cjs` |
 | Clip import, frame marking and Library | `ui/library.js`, `src/media.cjs`, `src/local-files.cjs` |
 | Recorded camera/profile evidence | `src/camera.cjs`, `src/quicktime-log.cjs` |
 | Published curves/gamuts and 33-point conversion | `src/camera-transforms.cjs`, `src/look-adapter.cjs`, `ui/porting.js` |
@@ -162,6 +188,67 @@ not a previous green run, before describing a build as verified.
   colour math are not inferred from AI suggestions.
 - Favourite counts reflect compatible variants for the current scene. Preserve
   project favourites across browsers and scene/device changes.
+
+## Agreed next workflow and latest product discussion
+
+The next build discussed with the owner is bulk linked intake with conservative
+representative-frame selection. It has NOT been implemented.
+
+- Choose clips from a folder; keep originals linked, never copy whole videos.
+- Generate **one representative saved frame per clip by default**. A second or
+  third requires a **very substantial, sustained visual difference**. Three is
+  a hard automatic ceiling, not a target; one or occasionally two is expected.
+- Ignore brief camera swings, passing objects, flashes and short transitions.
+  The owner means visibly very different sections, not semantic scene naming
+  or exhaustive edit/cut detection. Do not reinterpret this as a cut detector.
+- Allow replacing an automatic choice, scrubbing to another frame, adding any
+  number manually, and removing unwanted suggestions.
+- Reuse saved stills, short motion companions, collections and the existing
+  viewer. Avoid returning to the rejected separate Shoot-view modal.
+- Validate suggestion quality and sustained-change thresholds on real footage;
+  thresholds and detector accuracy are **[Unverified]**, not already decided.
+- Cover cancellation, retries/reopening without duplicate scenes, unavailable
+  originals, profile confirmation and mixed-profile LUT compatibility.
+
+Current intake already accepts multiple clips via the native picker. It links
+all selected files, then opens manual frame marking for the FIRST clip only.
+`frameCandidates` returns evenly spaced samples, not scene/change detection.
+There is no folder browser, bulk frame-generation pipeline or quick-preview mode.
+
+The owner's latest thought is a **lightweight preview space for a folder of Log
+footage**, optionally continuing into the full LUT Library workspace. Proposed
+experience: browse without project setup or permanent library intake, see a
+neutral display conversion, play/scrub/try LUTs, then keep selected scenes/looks
+without repeating import. This is **product exploration, not a settled UI or an
+implemented feature**. Resolve the browse-versus-save boundary with the owner
+before turning this into a larger media-management application. A supported
+recording profile must be established before claiming a neutral correct preview;
+unknown profiles need confirmation, not a guessed transform. Do not hold the
+first preview behind a whole-folder scan or pre-generate every LUT thumbnail.
+
+The owner uses **Resolve Studio** and wants a native-feeling connection. A
+one-shot round trip (select footage, explore here, send the chosen look back and
+verify colour) is the proposed first integration experiment. No Resolve bridge
+exists yet; API/version support, colour-managed pipeline handling, reproduction
+and whether an embedded/docked interface is possible remain unverified. Ordinary
+LUT browsing/hover previews/Selected LUTs comparison also exist in free Resolve;
+Studio's workflow integration mechanism is a separate capability. Do not present
+our comparison feature as unprecedented. Do not promise exact camera matching.
+
+The owner explicitly said they were NOT asking for conversational AI. The
+existing AI connection drafts editable names/descriptions/tags; published
+numerical transforms perform camera-profile adaptation without AI. Do not
+rebrand the conversion as AI-generated colour math.
+
+## Browser validation restriction
+
+A previous local-preview browser action was explicitly blocked by its URL
+security policy. Do not bypass that decision with another browser, raw CDP,
+Playwright from a shell, indirect execution or another route. Visual verification
+of the newest pane/picker/duplicate controls remains outstanding. Code tests and
+HTTP checks passed; those are not screenshots or human acceptance. Retry UI
+verification only after the access/policy situation materially changes. The
+owner accepted the earlier touching-frame layout via their own screenshot.
 
 ## Remaining limits and next decisions
 
