@@ -6,7 +6,7 @@
  const deviceChoices=new Map([...devices.values()].map(d=>[d.key,d.label]));
  const filteredIds=scope=>orderIds(scope).filter(id=>!(choosing?pickerDevice:product.getSelection().sceneDevice)||devices.get(id)?.key===(choosing?pickerDevice:product.getSelection().sceneDevice));
  const baseOrder=product.getSceneNavigation(),panel=el('scene-picker'),toggle=el('scene-picker-toggle'),list=el('scene-picker-list');
- let choosing=null,pickerDevice='';
+ let choosing=null,pickerDevice='',pickerAnchor=null,cancelChoice=null;
  let data={collections:[],memberships:[],sceneOrders:[],...boot.picker},available=new Set(baseOrder),browsing='',busy=false,dragging,draggingFolder,dropTarget,naming=false,requestVersion=0,selecting=false,checked=new Set(),anchor,undoRemoval,history;
  const reopenKey='scene-picker-reopen-'+boot.projectId;
  const node=(tag,text,className)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(className)n.className=className;return n;};
@@ -41,10 +41,15 @@
  async function call(method,payload){const r=await fetch('api/call',{method:'POST',headers:{'Content-Type':'application/json','X-LUT-Token':boot.token},body:JSON.stringify({method,payload:{projectId:boot.projectId,...payload}})});const result=await r.json();if(!r.ok||result.ok===false)throw new Error(result.error||'Could not save this change.');return result.data;}
  function status(text){el('scene-picker-status').textContent=text;}
  async function saved(work,message){if(busy)return false;busy=true;panel.setAttribute('aria-busy','true');drawActions();try{const value=await work();if(window.LUTLibrary?.acceptSnapshot)window.LUTLibrary.acceptSnapshot(value);else setLibrary(value);status(message);return true;}catch(error){status(error.message);draw();return false;}finally{busy=false;panel.removeAttribute('aria-busy');drawActions();}}
- function position(){const box=toggle.getBoundingClientRect(),width=Math.min(580,innerWidth-24);panel.style.width=width+'px';panel.style.left=Math.max(12,Math.min(box.left,innerWidth-width-12))+'px';panel.style.top=(box.bottom+8)+'px';panel.style.maxHeight=Math.max(130,innerHeight-box.bottom-20)+'px';}
- function close(focus=false){choosing=null;el('scene-picker-heading-title').textContent='Scenes';panel.hidden=true;toggle.setAttribute('aria-expanded','false');clearDrag();selecting=false;checked.clear();anchor=undefined;if(focus)toggle.focus({preventScroll:true});}
+ function position(){
+  const box=(pickerAnchor||toggle).getBoundingClientRect(),width=Math.min(580,innerWidth-24);panel.style.width=width+'px';
+  panel.style.left=Math.max(12,Math.min(pickerAnchor?box.left+(box.width-width)/2:box.left,innerWidth-width-12))+'px';
+  if(pickerAnchor){panel.style.maxHeight=Math.max(130,innerHeight-24)+'px';panel.style.top=Math.max(12,Math.min(box.top+(box.height-panel.offsetHeight)/2,innerHeight-panel.offsetHeight-12))+'px';}
+  else{panel.style.top=(box.bottom+8)+'px';panel.style.maxHeight=Math.max(130,innerHeight-box.bottom-20)+'px';}
+ }
+ function close(focus=false,selected=false){const cancelled=selected?null:cancelChoice,target=pickerAnchor;choosing=null;pickerAnchor=null;cancelChoice=null;requestVersion++;el('scene-picker-heading-title').textContent='Scenes';panel.hidden=true;toggle.setAttribute('aria-expanded','false');clearDrag();selecting=false;checked.clear();anchor=undefined;cancelled?.();if(focus){const button=target?.isConnected?target.querySelector('.pane-label,.pane-empty-choose'):null;(button||(!toggle.closest('.scene-control')?.hidden?toggle:el('stage'))).focus({preventScroll:true});}}
  async function open(options){
-  choosing=options?.onChoose||null;pickerDevice='';el('scene-picker-heading-title').textContent=options?.title||'Scenes';
+  choosing=options?.onChoose||null;pickerDevice='';pickerAnchor=options?.anchor||null;cancelChoice=options?.onCancel||null;el('scene-picker-heading-title').textContent=options?.title||'Scenes';
   browsing=product.getSelection().sceneCollection||'';el('scene-picker-search').value='';status('');panel.hidden=false;toggle.setAttribute('aria-expanded','true');position();draw();el('scene-picker-search').focus({preventScroll:true});
   const version=++requestVersion;
   try{const r=await fetch(`api/state?project=${boot.projectId}`,{cache:'no-store'});if(!r.ok)throw new Error('Could not refresh this scene list.');const value=await r.json();if(version===requestVersion&&!busy&&!dragging&&!draggingFolder)setLibrary(value);}catch(error){status(error.message);}
@@ -55,7 +60,7 @@
   if(ids.length&&!choosing){product.setSceneCollection(id);product.setSceneNavigation(ids);if(!ids.includes(product.getSelection().scene))product.selectScene(ids[0]);else sync();}
   draw();
  }
- function select(id){if(busy)return;if(choosing){const selected=choosing;close();selected(id);return;}product.setSceneCollection(browsing);product.setSceneNavigation(filteredIds(browsing));product.selectScene(id);close(true);}
+ function select(id){if(busy)return;if(choosing){const selected=choosing;close(false,true);selected(id);return;}product.setSceneCollection(browsing);product.setSceneNavigation(filteredIds(browsing));product.selectScene(id);close(true);}
  function setSelecting(value){if(busy)return;selecting=value;if(!value){checked.clear();anchor=undefined;}draw();}
  function check(id,event){
   if(busy)return;selecting=true;const ids=visibleIds(),value=!checked.has(id);
@@ -122,7 +127,7 @@
    row.addEventListener('drop',e=>{e.preventDefault();e.stopPropagation();const source=dragging,after=row.classList.contains('scene-drop-after');clearDrag();if(source&&!source.includes(id))move(source,id,after);});
   }
   el('scene-picker-empty').hidden=ids.length>0;el('scene-picker-empty').textContent=el('scene-picker-search').value.trim()?'No matching scenes.':product.getSelection().sceneDevice&&!ids.length?'No scenes for this device here. Choose All devices or another collection.':browsing?'No scenes in this collection. Drag scenes here from All scenes.':'Import a clip in Library to add your scenes.';
-  drawActions();
+  drawActions();if(!panel.hidden&&pickerAnchor)position();
  }
  function markDrop(row,after){dropTarget?.classList.remove('scene-drop-before','scene-drop-after');dropTarget=row;row.classList.add(after?'scene-drop-after':'scene-drop-before');}
  function clearDrag(){dragging=undefined;draggingFolder=undefined;dropTarget=undefined;el('scene-picker-trash').hidden=true;el('scene-picker-trash').classList.remove('scene-trash-over');for(const n of panel.querySelectorAll('.scene-dragging,.scene-drop-before,.scene-drop-after,.scene-drop-folder'))n.classList.remove('scene-dragging','scene-drop-before','scene-drop-after','scene-drop-folder');}
@@ -186,6 +191,6 @@
  },true);
  document.addEventListener('focusin',e=>{if(!panel.hidden&&!naming&&!panel.contains(e.target)&&!toggle.contains(e.target))close();});
  window.addEventListener('resize',()=>{if(!panel.hidden)position();});window.addEventListener('blur',clearDrag);
- window.LUTScenePicker={sync,setLibrary,orderIds,close,open};sync();
+ window.LUTScenePicker={sync,setLibrary,orderIds,close,open,position};sync();
  const reopenMessage=sessionStorage.getItem(reopenKey);if(reopenMessage){sessionStorage.removeItem(reopenKey);open().then(()=>status(reopenMessage));}
 })();

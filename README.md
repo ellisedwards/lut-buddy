@@ -161,7 +161,10 @@ remain unchanged. [How to use these tools and their limits](docs/INSPECTION.md).
 ## Split view, saved styles and moving scenes
 
 Use **+** in the viewer to add saved frames one at a time. They share the main
-viewer and LUT strip. Click a frame to make it active; adjustments, scopes and
+viewer and LUT strip. A blank slot appears with the scene picker over it; choosing
+a scene fills the slot, and cancelling restores the previous view. Split view
+hides the top scene selector: use the name on each frame to replace its scene.
+The top selector returns when viewing one frame. Click a frame to make it active; adjustments, scopes and
 playback follow that frame. Double-click or use its expand icon to see it large;
 **Escape** or the group icon returns to the same bunch.
 

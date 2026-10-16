@@ -7,14 +7,14 @@
  const model=window.LUTSplitState.create(saved,scenes.map(s=>s.id),product.getSelection().scene);
  const cells=new Map(),cache=new Map(),scratch=document.createElement('canvas');
  const homes=['stage','inspection-view','preview-loading'].map(id=>{const element=$(id),home=document.createComment(id+' home');element.before(home);return {element,home};});
- let renderer,paintVersion=0,cacheBytes=0,busy=false,styles=[],menuScene;
- const hasGroup=()=>model.state.ids.length>1,isGrid=()=>hasGroup()&&!model.state.focused;
+ let renderer,paintVersion=0,cacheBytes=0,busy=false,styles=[],menuScene,pendingPane=null;
+ const hasGroup=()=>model.state.ids.length>1,isGrid=()=>(hasGroup()||!!pendingPane)&&!model.state.focused;
  const family=record=>record?navigation.family(record):'';
  const compatible=(r,s)=>r.input===s.profile&&r.output==='rec709'||r.legacy&&r.input==='unknown'&&r.output==='unknown'&&s.profile==='sony-slog3-sgamut3cine';
  const recordFor=(s,target)=>target?records.find(r=>family(r)===target&&compatible(r,s)):null;
  const node=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e;};
  function icon(path,label){const button=node('button','pane-icon');button.type='button';button.title=label;button.setAttribute('aria-label',label);const svg=document.createElementNS('http://www.w3.org/2000/svg','svg'),p=document.createElementNS(svg.namespaceURI,'path');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('aria-hidden','true');p.setAttribute('d',path);svg.append(p);button.append(svg);return button;}
- function remember(){try{localStorage.setItem(storageKey,JSON.stringify(model.snapshot()));}catch{}buttons();}
+ function remember(){try{const saved=model.snapshot();if(pendingPane)saved.focused=pendingPane.previousFocused;localStorage.setItem(storageKey,JSON.stringify(saved));}catch{}buttons();}
  function closeMenus(){$('split-menu').hidden=true;$('pane-menu').hidden=true;$('split-menu-open').setAttribute('aria-expanded','false');}
  // Preserve preview detail when a frame becomes inactive; scaling down here
  // made it visibly softer than the same frame in the active viewer.
@@ -38,13 +38,13 @@
   $('shoot-export').textContent=count>1?'Export these '+count+' frames':'Export current frame';$('shoot-export').disabled=busy;$('shoot-save-style').disabled=busy||!product.getView();$('shoot-style-apply').disabled=busy||!$('shoot-style').value;$('shoot-delete-style').hidden=!$('shoot-style').value;
  }
  function layout(){
-  snapshotActive();for(const [id,cell]of cells)if(!model.state.ids.includes(id)){cell.pane.remove();cells.delete(id);}const grouped=isGrid();viewer.classList.toggle('panes-grid',grouped);viewer.classList.toggle('has-frame-group',hasGroup());grid.hidden=!grouped;
+  snapshotActive();for(const [id,cell]of cells)if(!model.state.ids.includes(id)){cell.pane.remove();cells.delete(id);}const grouped=isGrid();viewer.classList.toggle('panes-grid',grouped);viewer.classList.toggle('has-frame-group',hasGroup());grid.hidden=!grouped;$('scene-picker-toggle').closest('.scene-control').hidden=grouped;document.querySelector('.topbar').classList.toggle('split-layout',grouped);
   if(grouped){
    for(const id of model.state.ids)if(!cells.has(id))cells.set(id,makeCell(id));
    for(const [id,cell]of cells)if(!model.state.ids.includes(id)){cell.pane.remove();cells.delete(id);}
-   grid.replaceChildren(...model.state.ids.map(id=>cells.get(id).pane));grid.dataset.count=String(model.state.ids.length);
+   grid.replaceChildren(...model.state.ids.map(id=>cells.get(id).pane),...(pendingPane?[pendingPane.pane]:[]));grid.dataset.count=String(model.state.ids.length+(pendingPane?1:0));
 
-   const active=cells.get(model.state.active);for(const {element}of homes)active.body.append(element);
+   const active=cells.get(model.state.active);for(const {element,home}of homes)if(active)active.body.append(element);else home.after(element);
    for(const [id,cell]of cells){cell.pane.classList.toggle('active',id===model.state.active);cell.hit.hidden=id===model.state.active;cell.pane.setAttribute('aria-current',String(id===model.state.active));if(id===model.state.active){const target=targetFor(id),missing=!!target&&!recordFor(sceneMap.get(id),target);cell.pane.classList.toggle('pane-warning',missing);cell.pane.title=missing?'No compatible look for this recording profile':'';}}
   }else for(const {element,home}of homes)home.after(element);
   geometry();buttons();remember();document.dispatchEvent(new CustomEvent('lut-split-layout'));
@@ -53,7 +53,7 @@
   if(!isGrid())return;
   // Fit the images themselves, then centre the touching grid as one group.
   // Full-width cells with contain-fit images left empty space at every seam.
-  let best=1,area=0,width=0;const count=model.state.ids.length;
+  let best=1,area=0,width=0;const count=model.state.ids.length+(pendingPane?1:0);
   for(let cols=1;cols<=Math.min(count,8);cols++){if((count===3||count===4)&&cols!==2)continue;const rows=Math.ceil(count/cols),fit=Math.min(grid.clientWidth/cols,grid.clientHeight/rows*16/9),score=fit*fit*(count/(rows*cols));if(score>area){area=score;best=cols;width=fit;}}
   grid.style.setProperty('--pane-columns',best);grid.style.setProperty('--pane-width',width+'px');grid.style.setProperty('--pane-height',width*9/16+'px');
   // The global toolbar overlays the images. Keep local controls below it only
@@ -61,13 +61,20 @@
   const rows=Math.ceil(count/best),top=(grid.clientHeight-rows*width*9/16)/2,toolbarBottom=Math.max($('split-tools').offsetTop+$('split-tools').offsetHeight,$('motion-play').parentElement.offsetTop+$('motion-play').parentElement.offsetHeight);
   grid.style.setProperty('--pane-tools-top',Math.max(5,toolbarBottom+8-top)+'px');
   for(const [index,id]of model.state.ids.entries())cells.get(id).pane.classList.toggle('pane-top-row',index<best);
+  pendingPane?.pane.classList.toggle('pane-top-row',model.state.ids.length<best);if(!$('scene-picker').hidden)window.LUTScenePicker.position();
  }
  function show(){closeMenus();layout();if(product.getSelection().scene!==model.state.active)product.selectScene(model.state.active);else product.refresh();}
  function activate(id){snapshotActive();model.activate(id);show();}
  function focus(id=model.state.active){snapshotActive();model.focus(id);show();}
  function group(){model.group();show();}
  function keep(id){snapshotActive();model.keep(id);show();}
- function pick(replace){closeMenus();product.motion?.stop();window.LUTScenePicker.open({title:replace?'Replace frame':'Add frame to split view',onChoose:id=>{snapshotActive();if(replace)model.replace(replace,id);else model.add(id,family(product.getView()?.selected||records.find(r=>r.name===product.getSelection().selected)));show();}});}
+ function pick(replace){
+  window.LUTScenePicker.close();closeMenus();product.motion?.stop();let target;
+  const openPicker=()=>window.LUTScenePicker.open({title:replace?'Replace frame':'Choose scene for new frame',anchor:target,onCancel:()=>{if(!pendingPane)return;const focused=pendingPane.previousFocused;pendingPane.pane.remove();pendingPane=null;model.state.focused=focused;show();},onChoose:id=>{snapshotActive();pendingPane?.pane.remove();pendingPane=null;if(replace)model.replace(replace,id);else model.add(id,family(product.getView()?.selected||records.find(r=>r.name===product.getSelection().selected)));show();}});
+  if(replace)target=cells.get(replace)?.pane;
+  else{const pane=node('article','frame-pane pane-empty'),button=icon('M12 4v16M4 12h16','Choose a scene for new frame');pane.setAttribute('role','group');pane.setAttribute('aria-label','New frame');button.className='pane-empty-choose';button.append(node('span','Choose scene'));button.onclick=openPicker;pane.append(button);pendingPane={pane,previousFocused:model.state.focused};model.state.focused=false;layout();target=pane;paint();}
+  openPicker();
+ }
  function settings(scene){const a=window.LUTLookMath.settings(product.getSelection().adjustments?.[scene.id]||{});if(!window.LUTSourceCurves.forProfile(scene.profile)){a.exposure=0;a.warmth=0;a.tint=0;}return a;}
  function targetFor(id){const selection=product.getSelection();if(selection.comparing)return family(records.find(r=>r.name===selection.reference));return model.state.family===null?product.getSelection().sceneLooks?.[id]??family(records.find(r=>r.name===product.getSelection().selected)):model.state.family;}
  function keepCache(key,canvas){const bytes=canvas.width*canvas.height*4;cache.set(key,{canvas,bytes});cacheBytes+=bytes;while(cacheBytes>24*1024*1024&&cache.size>1){const oldest=cache.keys().next().value;cacheBytes-=cache.get(oldest).bytes;cache.delete(oldest);}}
